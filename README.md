@@ -1,5 +1,5 @@
 Metromap Designer
-Metromap Designer is an open-source tool for designing learning paths using a metroline metaphor. Authored by Tim van der Voord, this intuitive application allows educators and trainers to create visually engaging pathways that represent different educational journeys and courses.
+Metromap Designer is an open-source tool for designing learning paths using a metroline metaphor. This intuitive application allows educators and trainers to create visually engaging pathways that represent different educational journeys and courses.
 
 Features
 Interactive Design: Craft detailed learning paths easily with an engaging and interactive interface.
