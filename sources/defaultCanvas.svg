@@ -1,0 +1,54 @@
+<svg version="1.1" encoding="utf-8" id="canvas" width="1440" height="960" metromapversion="02.2024" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="overlay">
+  <g id="logo" transform="translate(1200, 0)">
+    <g id="svgLogo" style="visibility: visible">
+          <path d="M23.454 68.785l-20.62 55.488h15.768l2.729-7.883H33.46v7.883h15.464V68.785h-25.47zm9.703 31.535h-6.368l6.368-13.342v13.342zM94.71 68.178H70.149c-8.188 0-10.916 10.613-10.916 10.613l-5.761 33.051s-2.123 12.432 8.49 12.432h23.045l2.426-16.373H75.001s-5.458 1.213-4.548-4.852c.303-.91 2.426-13.039 2.426-13.039s.606-4.245 3.335-4.245h15.464l3.032-17.587zM101.988 68.482l-11.523 55.791h15.162l5.154-23.65 1.213 23.65h8.188l9.095-23.65-4.548 23.65h13.644l11.221-56.095h-19.406l-9.401 23.348V68.482h-18.799zM145.955 124.273l10.611-56.095h31.233l-2.426 16.072H169l-.91 5.457h15.767l-2.425 12.129-16.071-.303-.91 5.457h16.07l-3.335 17.283h-31.231zM185.07 123.365c-2.123 0-3.336-1.518-3.336-3.639 0-2.123 1.213-3.639 3.336-3.639s3.639 1.516 3.639 3.639c0 2.122-1.516 3.639-3.639 3.639zm0 1.213c2.729 0 4.852-2.426 4.852-4.852 0-2.729-2.123-4.852-4.852-4.852s-4.852 2.123-4.852 4.852c.001 2.426 2.124 4.852 4.852 4.852zm1.213-4.549c.91 0 1.516-.303 1.516-1.516s-.91-1.516-2.123-1.516h-2.426v5.154h.91v-2.123h.91l1.213 2.123h1.213l-1.213-2.122zm-2.123-.607v-1.516h1.213c.607 0 1.213 0 1.213.607 0 .605-.303.908-.91.908h-1.516v.001z" fill="#cd5241"/>
+    </g>
+    <image style="visibility: hidden;overflow:visible;enable-background:new;" height="200px" y="40" x="1200" id="imgLogo"></image>
+  </g>
+  <g id="overlayText"> 
+    <text id="titleText" class="titleText" transform="translate(40.0855, 80.3909)" font-family="Helvetica" font-weight="600" font-size="40px">
+        <tspan id="titleText1" x="0" y="0">Metromap learning paths</tspan>
+        <tspan id="titleText2" x="0" y="60">for life long development</tspan>
+    </text>
+    <text id="academyName" class="academyName" transform="translate(40.5656, 190.9541)" font-family="Helvetica" font-weight="600" font-size="30px" style="fill:rgb(160, 165, 169)">Region Amsterdam</text>
+  </g>
+  <g id="legendaStations">
+  		<path style="fill:none;stroke:#000000;stroke-width:2;" d="M1340.7,911.9h-93.2c-26.8,0-48.7-21.3-48.7-47.6v-2.9
+			c0-26.2,21.8-47.6,48.7-47.6h93.2c26.8,0,48.7,21.3,48.7,47.6v2.9C1389.4,890.6,1367.6,911.9,1340.7,911.9z"/>
+		<text transform="matrix(1 0 0 1 1243.2458 806.1271)" style="font-family:'Helvetica'; font-weight:500; font-size:12px;" class="legendaText">Legend</text>
+		<g class="legendaStationItem">
+			<path d="M1251.9,839.4h-8.8c-1.7,0-3-1.4-3-3v-8.9c0-1.7,1.4-3,3-3h8.9c1.7,0,3,1.4,3,3v8.9C1255,838,1253.6,839.4,1251.9,839.4z"/>
+			<text class="legendaStationItemSymbol" transform="matrix(1 0 0 1 1244.5715 834.3055)" style="fill:#FFFFFF; font-family:'Helvetica'; font-weight:500; font-size:10px;">w</text>
+			<text class="legendaStationItemName" transform="matrix(1 0 0 1 1258.2955 834.3055)" style="font-family:'Helvetica'; font-weight:500; font-size:10px;">Workshop</text>
+		</g>
+		<g class="legendaStationItem">
+			<path d="M1251.9,859.6h-8.8c-1.7,0-3-1.4-3-3v-8.9c0-1.7,1.4-3,3-3h8.9c1.7,0,3,1.4,3,3v8.9
+				C1255,858.3,1253.6,859.6,1251.9,859.6z"/>
+			<text class="legendaStationItemSymbol" transform="matrix(1 0 0 1 1243.2054 854.6025)" style="fill:#FFFFFF; font-family:'Helvetica'; font-weight:500; font-size:10px;">e</text>
+			<text class="legendaStationItemName" transform="matrix(1 0 0 1 1258.2955 854.6025)" style="font-family:'Helvetica'; font-weight:500; font-size:10px;">E-learning</text>
+		</g>
+		<g class="legendaStationItem">
+			<path d="M1251.9,879.9h-8.8c-1.7,0-3-1.4-3-3V868c0-1.7,1.4-3,3-3h8.9c1.7,0,3,1.4,3,3v8.9C1255,878.6,1253.6,879.9,1251.9,879.9
+				z"/>
+			<text class="legendaStationItemSymbol" transform="matrix(1 0 0 1 1244.3505 874.845)" style="fill:#FFFFFF; font-family:'Helvetica'; font-weight:500; font-size:10px;">m</text>
+			<text class="legendaStationItemName" transform="matrix(1 0 0 1 1258.2955 874.8452)" style="font-family:'Helvetica'; font-weight:500; font-size:10px;">Masterclass</text>
+		</g>
+		<g class="legendaStationItem">
+			<path d="M1251.9,900.4h-8.8c-1.7,0-3-1.4-3-3v-8.9c0-1.7,1.4-3,3-3h8.9c1.7,0,3,1.4,3,3v8.9
+				C1255,899.1,1253.6,900.4,1251.9,900.4z"/>
+			<text class="legendaStationItemSymbol" transform="matrix(1 0 0 1 1244.4554 895.3627)" style="fill:#FFFFFF; font-family:'Helvetica'; font-weight:500; font-size:10px;">*</text>
+			<text class="legendaStationItemName" transform="matrix(1 0 0 1 1258.2955 895.3627)" style="font-family:'Helvetica'; font-weight:500; font-size:10px;">Other</text>
+		</g>
+	</g>
+</g>
+<g id="legenda" transform="translate(61.1258, 863.8569)">
+  <text x="0" y="0" style="font-family:'Helvetica'; font-weight:500; font-size:12px;" class="legendaLineText">Metrolines on this map</text>
+  <g id="legendaGroupCol1" transform="translate(0, 0)" position="relative"></g>
+  <g id="legendaGroupCol2" transform="translate(300, 0)" position="relative"></g>
+</g>
+<g id="metrolines">
+</g>
+<g id="stations">
+</g>
+</svg>
