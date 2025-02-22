@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 import * as helpers from '../common.js';
 import * as config from '../config.js';
 
@@ -425,7 +421,7 @@ export default class metromapLegenda {
     toJSON() {
         return this.legendaItems.map(item => {
             return {
-                metrolineID: item.getAttribute("metrolineid"),
+                metroLineId: item.getAttribute("metrolineid"),
                 color: item.querySelector(".legendaPolyline")?.getAttribute("stroke"),
                 name: item.querySelector(".metroLineName")?.textContent,
                 targetGroup: item.querySelector(".metroLineTargetGroup")?.textContent,
@@ -447,7 +443,7 @@ export default class metromapLegenda {
         if (!item) return null;
 
         return {
-            metrolineID: item.getAttribute("metrolineid"),
+            metroLineId: item.getAttribute("metrolineid"),
             color: item.querySelector(".legendaPolyline")?.getAttribute("stroke"),
             name: item.querySelector(".metroLineName")?.textContent,
             targetGroup: item.querySelector(".metroLineTargetGroup")?.textContent

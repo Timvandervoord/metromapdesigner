@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 /**
  * Class representing a state manager for managing undo/redo functionality
  * on a metromap application. This class handles saving, reverting, clearing,

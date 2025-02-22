@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 import * as helpers from '../common.js';
 import * as config from '../config.js';
 
@@ -81,7 +77,7 @@ export default class metromapStation {
             this.metrolineid = stationValues.metrolineid;
             this.x = stationValues.x;
             this.y = stationValues.y;
-            this.externalUniqueID = stationValues.externalUniqueID || "";
+            this.externalUniqueID = stationValues.externalUniqueId || null;
 
             // Create new station
             this.new();
@@ -1141,7 +1137,7 @@ export default class metromapStation {
             description: this.description,
             link: this.link,
             metrolines: this.metrolines.map(metroline => metroline.getId()),
-            externalUniqueID: this.externalUniqueID || "",
+            externalUniqueId: this.externalUniqueID || null,
         };
     }
 }

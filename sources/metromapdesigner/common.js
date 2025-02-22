@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 import * as config from './config.js';
 
 //############################################################################################
@@ -239,6 +235,23 @@ export function getMousePos(evt, map) {
         R: parseInt(match[1], 10),
         G: parseInt(match[2], 10),
         B: parseInt(match[3], 10)
+    };
+  }
+
+  /**
+   * Parses an RGB string like "rgb(227, 32, 23)" into an object with R, G, and B properties.
+   * @param {string} rgbString - The RGB string to parse.
+   * @returns {Object} An object with R, G, and B properties.
+   */
+  export function parseRGBStringSC(rgbString) {
+    const match = rgbString.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+    if (!match) {
+        throw new Error(`Invalid RGB string: ${rgbString}`);
+    }
+    return {
+        r: parseInt(match[1], 10),
+        g: parseInt(match[2], 10),
+        b: parseInt(match[3], 10)
     };
   }
 

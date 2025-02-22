@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 import * as helpers from '../common.js';
 import * as config from '../config.js';
 import metromapLegenda from './legenda.js';
@@ -730,7 +726,13 @@ export default class metromap {
             throw new Error("Invalid station configuration, should at least contain X and Y position.");
         }
 
-        const alignedPosition = this.getHalfGridAlignedPosition(configuration.x, configuration.y);
+        // The aligment should be along grid when a station is drawn before the first metroline, otherwise we allow halfgrid positioning
+        let alignedPosition;
+        if (this.lines.length === 0) {
+            alignedPosition = this.getGridAlignedPosition(configuration.x, configuration.y);
+        } else {
+            alignedPosition = this.getHalfGridAlignedPosition(configuration.x, configuration.y);
+        }
         configuration.x = alignedPosition.x;
         configuration.y = alignedPosition.y;
 
@@ -1632,8 +1634,8 @@ export default class metromap {
 
         // If no line exists, create one
         if (this.lines.length === 0) {
-            const startLine = { x: x - 20, y: y };
-            const endLine = { x: x + 20, y: y };
+            const startLine = { x: x, y: y };
+            const endLine = { x: x + 30, y: y };
 
             // Draw a new line on the canvas
             this.drawLineOnCanvas(startLine, endLine, config.metrolineConfig.defaultColor);
@@ -1872,14 +1874,14 @@ export default class metromap {
     toJSON() {
         // Map legend items by metrolineID for quick lookup
         const legendItems = this.legenda.toJSON().reduce((map, legendItem) => {
-            map[legendItem.metrolineID] = legendItem;
+            map[legendItem.metroLineId] = legendItem;
             return map;
         }, {});
 
         // Merge metroline data with legend info directly
         const metrolinesWithLegend = this.lines.map(line => {
             const metrolineData = line.toJSON();
-            const legendData = legendItems[metrolineData.metrolineID] || {};
+            const legendData = legendItems[metrolineData.metroLineId] || {};
             return {
                 ...legendData,
                 ...metrolineData, // Embed legend info directly into the metroline object
@@ -1893,8 +1895,8 @@ export default class metromap {
                 width: this.getWidth(),
                 height: this.getHeight(),
             },
-            externalUniqueID: this.externalUniqueID || "",
-            metrolines: metrolinesWithLegend,
+            externalUniqueId: this.externalUniqueID || null,
+            metroLines: metrolinesWithLegend,
             stations: this.stations.map(station => station.toJSON()),
         };
     }
@@ -1915,7 +1917,7 @@ export default class metromap {
             // Set the map title
             if (jsonData.title) this.setTitle(jsonData.title);
             this.externalUniqueID = jsonData.externalUniqueID || ""; 
-            this.svgMap.setAttribute("externalUniqueID", this.externalUniqueID);
+            this.svgMap.setAttribute("externalUniqueId", this.externalUniqueID);
 
             // Set the map academy
             this.setSubTitle(jsonData.subTitle || "");
@@ -1926,9 +1928,9 @@ export default class metromap {
             }
 
             // Import metrolines
-            if (Array.isArray(jsonData.metrolines)) {
-                jsonData.metrolines.forEach(metrolineData => {
-                    const lineColor = `rgb(${metrolineData.color.R},${metrolineData.color.G},${metrolineData.color.B})`;
+            if (Array.isArray(jsonData.metroLines)) {
+                jsonData.metroLines.forEach(metrolineData => {
+                    const lineColor = `rgb(${metrolineData.color.r},${metrolineData.color.g},${metrolineData.color.b})`;
 
                     // Create and populate the metroline
                     const newMetroline = this.addLineLayer(lineColor);

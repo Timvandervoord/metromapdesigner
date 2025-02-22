@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 import * as config from '../config.js';
 
 /**
@@ -42,25 +38,39 @@ export default class MetromapImportExport {
   }
 
   /**
-   * Retrieves shared canvas content using a unique code.
-   * 
-   * @param {string} code - The unique code for the shared canvas.
-   * @returns {Promise<string>} - A promise resolving to the sanitized SVG content.
+   * Retrieves content using a unique code.
+   *
+   * Depending on the specified type, it retrieves either:
+   * - The shared canvas content as sanitized SVG (when type is 'svg').
+   * - The JSON data (when type is 'json').
+   *
+   * @param {string} code - The unique code for the shared content.
+   * @param {string} [type='svg'] - The type of content to retrieve ('svg' or 'json').
+   * @returns {Promise<Object|string>} - A promise resolving to either the parsed JSON data or the sanitized SVG content.
    * @throws Will throw an error if the request fails.
    */
-  async retrieveSharedCanvas(code) {
+  async retrieveContent(code, type = 'svg') {
     try {
-      let response = await fetch(config.applicationConfig.retrievalLink + encodeURIComponent(code));
+      const response = await fetch(config.applicationConfig.retrievalLink + encodeURIComponent(code));
       
       if (!response.ok) {
-        throw new Error(`Error retrieving metro map: ${response.statusText}`);
+        throw new Error(`Error retrieving content: ${response.statusText}`);
       }
-
-      let svgContent = await response.text();
-      return this.sanitizeMapContent(svgContent);
+      
+      if (type === 'json') {
+        const jsonData = await response.json();
+        return jsonData;
+      } else {
+        const svgContent = await response.text();
+        return this.sanitizeMapContent(svgContent);
+      }
     } catch (error) {
       console.error(error);
-      throw new Error("Error retrieving the metro map");
+      if (type === 'json') {
+        throw new Error("Error retrieving JSON data");
+      } else {
+        throw new Error("Error retrieving the metro map");
+      }
     }
   }
 
@@ -171,6 +181,48 @@ export default class MetromapImportExport {
   }
 
   /**
+   * Retrieves JSON data using a unique code and imports it to the provided map.
+   *
+   * @param {Object} map - The metromap object to be updated.
+   * @param {string} code - The unique code for the JSON data.
+   * @returns {Promise<boolean>} - A promise resolving to true if the import succeeds.
+   * @throws Will throw an error if the retrieval or import fails.
+   */
+   async retrieveAndImportJSON(map, code) {
+      try {
+        // Retrieve the JSON data using the unified retrieveContent function
+        const jsonData = await this.retrieveContent(code, 'json');
+        // Convert the JSON object into a string as expected by importJSON
+        const jsonString = JSON.stringify(jsonData);
+        // Import the JSON string into the map
+        return this.importJSON(map, jsonString);
+      } catch (error) {
+        throw new Error("Error retrieving and importing JSON data");
+      }
+  }
+
+  /**
+   * Retrieves SVG data using a unique code and loads it into the provided map.
+   *
+   * @param {Object} map - The metromap object which should have a loadMap method.
+   * @param {string} code - The unique code for the SVG data.
+   * @returns {Promise<boolean>} - A promise resolving to true if the load succeeds.
+   * @throws Will throw an error if the retrieval or loading fails.
+   */
+  async retrieveAndLoadSVG(map, code) {
+    try {
+      // Retrieve the sanitized SVG content using the unified retrieveContent function
+      const svgContent = await this.retrieveContent(code, 'svg');
+      // Load the SVG content into the map using its loadMap method
+      map.loadMap(svgContent);
+      return true;
+    } catch (error) {
+      console.error(error);
+      throw new Error("Error retrieving and loading SVG data");
+    }
+  }
+
+  /**
    * Imports a JSON string, validates it, and updates the provided map object.
    * 
    * @param {Object} map - The metromap object to be updated.
@@ -220,7 +272,7 @@ export default class MetromapImportExport {
 
     // If the map has no stations and no metrolines, it's considered an empty map and valid
     const hasStations = Array.isArray(map.stations) && map.stations.length > 0;
-    const hasMetrolines = Array.isArray(map.metrolines) && map.metrolines.length > 0;
+    const hasMetrolines = Array.isArray(map.metroLines) && map.metroLines.length > 0;
     if (!hasStations && !hasMetrolines) {
       return true; // Empty map is valid
     }
@@ -230,26 +282,26 @@ export default class MetromapImportExport {
     if (hasStations && !hasMetrolines) {
       errors.push("The map must have at least one metroline if stations are present.");
     } else {
-      map.metrolines.forEach((metroline, index) => {
-        if (!metroline.metrolineID) errors.push(`Metroline at index ${index} must have an 'id'.`);
+      map.metroLines.forEach((metroline, index) => {
+        if (!metroline.metroLineId) errors.push(`Metroline at index ${index} must have an 'id'.`);
         if (!metroline.name) errors.push(`Metroline at index ${index} must have a 'name'.`);
         if (!metroline.targetGroup) errors.push(`Metroline at index ${index} must have a 'target group'.`);
-        if (!metroline.color || typeof metroline.color.R !== "number" || typeof metroline.color.G !== "number" || typeof metroline.color.B !== "number") {
+        if (!metroline.color || typeof metroline.color.r !== "number" || typeof metroline.color.g !== "number" || typeof metroline.color.b !== "number") {
           errors.push(`Metroline at index ${index} must have a valid 'color' (R, G, B).`);
         }
         if (!Array.isArray(metroline.segments) || metroline.segments.length === 0) {
           errors.push(`Metroline at index ${index} must have at least one 'segment'.`);
         } else {
           metroline.segments.forEach((segment, segIndex) => {
-            if (!segment.Start || typeof segment.Start.X !== "number" || typeof segment.Start.Y !== "number") {
+            if (!segment.start || typeof segment.start.x !== "number" || typeof segment.start.y !== "number") {
               errors.push(`Segment at index ${segIndex} of metroline at index ${index} must have valid 'start' coordinates.`);
             }
-            if (!segment.End || typeof segment.End.X !== "number" || typeof segment.End.Y !== "number") {
+            if (!segment.end || typeof segment.end.x !== "number" || typeof segment.end.y !== "number") {
               errors.push(`Segment at index ${segIndex} of metroline at index ${index} must have valid 'end' coordinates.`);
             }
           });
         }
-        if (metroline.metrolineID) metrolineIDs.add(metroline.metrolineID);
+        if (metroline.metroLineId) metrolineIDs.add(metroline.metroLineId);
       });
     }
 

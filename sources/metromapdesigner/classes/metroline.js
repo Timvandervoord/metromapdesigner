@@ -1,7 +1,3 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
 import * as helpers from '../common.js';
 import * as config from '../config.js';
 
@@ -440,29 +436,29 @@ export default class metromapMetroline {
                 const startPoint = pointsArray[0];
                 const endPoint = pointsArray[pointsArray.length - 1];
                 const intermediatePoints = pointsArray.slice(1, pointsArray.length - 1).map(point => ({
-                    X: point.x,
-                    Y: point.y
+                    x: point.x,
+                    y: point.y
                 }));
 
                 return {
-                    Start: {
-                        X: startPoint.x,
-                        Y: startPoint.y
+                    start: {
+                        x: startPoint.x,
+                        y: startPoint.y
                     },
-                    End: {
-                        X: endPoint.x,
-                        Y: endPoint.y
+                    end: {
+                        x: endPoint.x,
+                        y: endPoint.y
                     },
                     Segments: intermediatePoints
                 };
             })
             .filter(line => line !== null);
 
-        const color = helpers.parseRGBString(this.metrolineColor);
+        const color = helpers.parseRGBStringSC(this.metrolineColor);
 
         return {
-            metrolineID: this.metrolineID,
-            externalUniqueID: this.externalUniqueID || "",
+            metroLineId: this.metrolineID,
+            externalUniqueId: this.externalUniqueID || null,
             color: color,
             segments: lines
         };
@@ -480,27 +476,27 @@ export default class metromapMetroline {
         }
 
         // Validate required properties
-        const { metrolineID, color, segments, externalUniqueID } = jsonData;
-        if (!metrolineID || !color || !Array.isArray(segments)) {
+        const { metroLineId, color, segments, externalUniqueId } = jsonData;
+        if (!metroLineId || !color || !Array.isArray(segments)) {
             throw new Error("Invalid metroline JSON structure. Missing required properties.");
         }
 
         // Set the metroline ID and color
-        this.metrolineID = metrolineID;
-        this.metrolineColor = `rgb(${color.R}, ${color.G}, ${color.B})`;
-        this.externalUniqueID = externalUniqueID || "";
-        this.metrolineGroup.setAttribute("externalUniqueID", this.externalUniqueID || "");
+        this.metrolineID = metroLineId;
+        this.metrolineColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+        this.externalUniqueID = externalUniqueId || "";
+        this.metrolineGroup.setAttribute("externalUniqueID", this.externalUniqueID);
 
         // Recreate polylines from the segments
         segments.forEach(segment => {
-            const { Start, End, Segments } = segment;
-            if (!Start || !End || typeof Start.X !== "number" || typeof Start.Y !== "number" ||
-                typeof End.X !== "number" || typeof End.Y !== "number") {
+            const { start, end, segments } = segment;
+            if (!start || !end || typeof start.x !== "number" || typeof start.y !== "number" ||
+                typeof end.x !== "number" || typeof end.y !== "number") {
                 throw new Error("Invalid segment data in JSON.");
             }
 
             // Use the draw method to create the polyline
-            this.draw(Start.X, Start.Y, End.X, End.Y, Segments);
+            this.draw(start.x, start.y, end.x, end.y, segments);
         });
     }
 }
