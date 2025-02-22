@@ -417,76 +417,93 @@ export default class MetroMapDesigner {
       this.map.moveStationsAndLinesByOffset(...offset);
     }
 
-    /**
-     * Enables inline text editing for an SVG <text> or <tspan> element.
-     * 
-     * @param {SVGTextElement|SVGTSpanElement} textElement - The <text> or <tspan> element to edit.
-     * @param {HTMLElement} container - The container of the SVG element.
-     * @param {Function} onSave - Callback function to call after saving changes.
-     */
-    enableInlineTextEditing(textElement, container, onSave) {
-      // Determine the bounding box of the element
-      const bbox = textElement.getBBox();
-      const containerRect = container.getBoundingClientRect();
+  /**
+   * Enables inline text editing for an SVG <text> or <tspan> element.
+   * 
+   * This version uses the SVG coordinate system to correctly determine the element's
+   * screen position, even when the SVG is transformed.
+   *
+   * @param {SVGTextElement|SVGTSpanElement} textElement - The <text> or <tspan> element to edit.
+   * @param {HTMLElement} container - The container of the SVG element.
+   * @param {Function} onSave - Callback function to call after saving changes.
+   */
+  enableInlineTextEditing(textElement, container, onSave) {
+    // Determine the bounding box of the element in its own coordinate system
+    const bbox = textElement.getBBox();
 
-      // Get current transformation matrix of the SVG
-      const ctm = textElement.getScreenCTM();
-
-      // Calculate the absolute position of the text or tspan element
-      const x = ctm.a * bbox.x + ctm.e + containerRect.left;
-      const y = ctm.d * bbox.y + ctm.f + containerRect.top;
-
-      // If the element is a <tspan>, consider its parent's attributes
-      const parentText = textElement.tagName.toLowerCase() === "tspan" ? textElement.parentNode : textElement;
-
-      // Create an input element
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = textElement.textContent;
-
-      // Position and style the input element
-      input.style.position = "absolute";
-      input.style.left = `${x}px`;
-      input.style.top = `${y - bbox.height}px`; // Adjust for the text baseline
-      input.style.width = `${bbox.width + 100}px`;
-      input.style.fontSize = `${parentText.getAttribute("font-size") || 16}px`;
-      input.style.fontFamily = `${parentText.getAttribute("font-family") || "Arial"}`;
-      input.style.border = "1px solid #ccc";
-      input.style.padding = "2px";
-      input.style.background = "#fff";
-      input.style.zIndex = "1000";
-      input.style.boxSizing = "border-box";
-
-      // Add the input element to the DOM
-      document.body.appendChild(input);
-
-      // Stop propagation of events to avoid immediate blur
-      input.addEventListener("mousedown", (event) => event.stopPropagation());
-      input.addEventListener("click", (event) => event.stopPropagation());
-
-      // Use a flag to prevent multiple removal calls
-      let isRemoved = false;
-
-      const saveChanges = () => {
-          if (isRemoved) return; // Prevent multiple executions
-          isRemoved = true;
-          this.stateManager.saveState(this.map);
-          textElement.textContent = input.value; // Update the SVG text or tspan
-          onSave?.(); // Call onSave callback if provided
-          input.remove(); // Remove the input element
-          this.map.legenda.updateLegenda();
-          this.map.legenda.resize();
-      };
-
-      // Focus the input and bind event listeners
-      setTimeout(() => {
-          input.focus();
-          input.addEventListener("blur", saveChanges);
-          input.addEventListener("keydown", (event) => {
-              if (event.key === "Enter") saveChanges();
-          });
-      }, 0);
+    // Get the owning SVG element (which holds the proper coordinate system)
+    const svg = textElement.ownerSVGElement;
+    if (!svg) {
+      console.error("No owner SVG element found.");
+      return;
     }
+
+    // Create an SVGPoint at the top-left of the text element's bounding box
+    const point = svg.createSVGPoint();
+    point.x = bbox.x;
+    point.y = bbox.y;
+    
+    // Transform the point from the text element's coordinate space to screen coordinates.
+    // getScreenCTM() returns the matrix that maps the element's coordinates to screen coordinates.
+    const screenPoint = point.matrixTransform(textElement.getScreenCTM());
+
+    // Include the window scroll offsets to get absolute page coordinates.
+    const x = screenPoint.x + window.scrollX;
+    const y = screenPoint.y + window.scrollY;
+
+    // If the element is a <tspan>, fall back to its parent <text> for style attributes.
+    const parentText = textElement.tagName.toLowerCase() === "tspan" ? textElement.parentNode : textElement;
+
+    // Create an input element for inline editing.
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = textElement.textContent;
+
+    // Position and style the input element
+    input.style.position = "absolute";
+    input.style.left = `${x}px`;
+    // Adjust y by subtracting bbox.height to roughly align with the text baseline.
+    input.style.top = `${y}px`;
+    // Provide extra width for better usability.
+    input.style.width = `${bbox.width + 100}px`;
+    input.style.fontSize = `${parentText.getAttribute("font-size") || 16}px`;
+    input.style.fontFamily = `${parentText.getAttribute("font-family") || "Arial"}`;
+    input.style.border = "1px solid #ccc";
+    input.style.padding = "2px";
+    input.style.background = "#fff";
+    input.style.zIndex = "1000";
+    input.style.boxSizing = "border-box";
+
+    // Append the input element to the document.
+    document.body.appendChild(input);
+
+    // Stop propagation to prevent unwanted blur events.
+    input.addEventListener("mousedown", (event) => event.stopPropagation());
+    input.addEventListener("click", (event) => event.stopPropagation());
+
+    let isRemoved = false;
+
+    const saveChanges = () => {
+      if (isRemoved) return;
+      isRemoved = true;
+      // Assuming stateManager and map are defined in the context of this class
+      this.stateManager.saveState(this.map);
+      textElement.textContent = input.value; // Update the SVG text content
+      onSave?.();
+      input.remove();
+      this.map.legenda.updateLegenda();
+      this.map.legenda.resize();
+    };
+
+    // Focus the input after adding it to the DOM and bind event listeners.
+    setTimeout(() => {
+      input.focus();
+      input.addEventListener("blur", saveChanges);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") saveChanges();
+      });
+    }, 0);
+  }
 
     // MOUSE EVENT HANDLERS
 
