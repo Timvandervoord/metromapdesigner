@@ -320,10 +320,10 @@ export default class MetromapImportExport {
         if (station.shape === "connection" && (typeof station.width !== "number" || station.width <= 0)) {
           errors.push(`Station at index ${index} with 'connection' shape must have a valid 'width'.`);
         }
-        if (!Array.isArray(station.metrolines) || station.metrolines.length === 0) {
+        if (!Array.isArray(station.metroLines) || station.metroLines.length === 0) {
           errors.push(`Station at index ${index} must have at least one associated 'metroline'.`);
         } else {
-          station.metrolines.forEach((id) => {
+          station.metroLines.forEach((id) => {
             if (!metrolineIDs.has(id)) {
               errors.push(`Station at index ${index} references non-existent metroline ID '${id}'.`);
             }

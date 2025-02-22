@@ -1136,7 +1136,7 @@ export default class metromapStation {
             width: this.width,
             description: this.description,
             link: this.link,
-            metrolines: this.metrolines.map(metroline => metroline.getId()),
+            metroLines: this.metrolines.map(metroline => metroline.getId()),
             externalUniqueId: this.externalUniqueID || null,
         };
     }

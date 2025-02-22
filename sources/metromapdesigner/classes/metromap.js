@@ -1948,7 +1948,7 @@ export default class metromap {
             // Import stations
             if (Array.isArray(jsonData.stations)) {
                 jsonData.stations.forEach(stationData => {
-                    const metroline = this.getMetrolineWithId(stationData.metrolines[0]);
+                    const metroline = this.getMetrolineWithId(stationData.metroLines[0]);
                     const stationLineLayer = this.getStationLineLayer(metroline);
                     stationData.x = stationData.position.x;
                     stationData.y = stationData.position.y;
