@@ -1,8 +1,4 @@
-// Copyright (C) 2024 Tim van der Voord (tim@vandervoord.nl)
-//
-// This file may be distributed under the terms of the GNU GPLv3 license.
-
-import metromapdesigner from './metromapdesigner/metromapdesigner.js';
+import MetroMapDesigner from './metromapdesigner/MetroMapDesigner.js';
 import * as helpers from './metromapdesigner/common.js';
 import * as config from './metromapdesigner/config.js';
 
@@ -31,7 +27,7 @@ import * as config from './metromapdesigner/config.js';
 export async function loadInterface() {
   try {
     // Initialize the MetroMap designer with the SVG container
-    metromapdesignapplication = new metromapdesigner(document.getElementById("canvas-container"));
+    metromapdesignapplication = new MetroMapDesigner(document.getElementById("canvas-container"));
     
     // Load the default map from a predefined URL
     await metromapdesignapplication.loadMapFromUrl("sources/defaultCanvas.svg");
@@ -50,12 +46,23 @@ export async function loadInterface() {
 
     // Parse the URL for a 'code' parameter to load a shared map
     const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get("mc");
+    const svgCode = urlParams.get("mc");
+    const jsonCode = urlParams.get("json");
 
-    // If a 'code' parameter exists, attempt to load the shared map
-    if (code) {
+    // If a 'svgCode' parameter exists, attempt to load the shared map
+    if (svgCode) {
       try {
-        metromapdesignapplication.loadMapWithShareCode(code);
+        metromapdesignapplication.loadMapWithSvgCode(svgCode);
+      } catch (e) {
+        console.warn(e);
+        showAlert(`Fout bij het ophalen van de metrokaart: ${e}`, "danger");
+      }
+    }
+
+    // If a 'jsonCode' parameter exists, attempt to load the shared map
+    if (jsonCode) {
+      try {
+        metromapdesignapplication.loadMapWithJsonCode(jsonCode);
       } catch (e) {
         console.warn(e);
         showAlert(`Fout bij het ophalen van de metrokaart: ${e}`, "danger");
@@ -656,7 +663,7 @@ function initInterface() {
   // Set app data in the document
   document.getElementById("appVersion").textContent = config.applicationConfig.appVersion;
   document.getElementById("appName").textContent = config.applicationConfig.appName;
-  document.title = `${config.applicationConfig.appName} | ${config.applicationConfig.appVersion}`;
+  document.title = `${config.applicationConfig.appName} | SMART MAKERS ACADEMY | ${config.applicationConfig.appVersion}`;
 
   // For toolbars
   const toolbarHandles = document.querySelectorAll(".toolbar-handle");
