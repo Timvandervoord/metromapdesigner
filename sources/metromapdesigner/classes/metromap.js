@@ -1851,7 +1851,7 @@ export default class metromap {
         }
 
         // Deselect all stations
-        this.unselectAllStations();
+        //this.unselectAllStations();
 
         // Temporarily remove the grid layer
         this.gridRemove();
