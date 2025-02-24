@@ -873,7 +873,8 @@ export default class MetroMapDesigner {
     loadMapWithSvgCode(code) {
       // Clear map first
       this.clearMap();
-      this.importExport.retrieveAndLoadSVG(this.map, code)
+      const svgContent = this.importExport.retrieveAndLoadSVG(code);
+      this.loadMap(svgContent);
     }
 
     /**
