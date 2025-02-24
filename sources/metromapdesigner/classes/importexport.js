@@ -209,13 +209,12 @@ export default class MetromapImportExport {
    * @returns {Promise<boolean>} - A promise resolving to true if the load succeeds.
    * @throws Will throw an error if the retrieval or loading fails.
    */
-  async retrieveAndLoadSVG(map, code) {
+  async retrieveAndLoadSVG(code) {
     try {
       // Retrieve the sanitized SVG content using the unified retrieveContent function
       const svgContent = await this.retrieveContent(code, 'svg');
       // Load the SVG content into the map using its loadMap method
-      map.loadMap(svgContent);
-      return true;
+      return svgContent;
     } catch (error) {
       console.error(error);
       throw new Error("Error retrieving and loading SVG data");
