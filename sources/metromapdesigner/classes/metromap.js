@@ -573,6 +573,9 @@ export default class metromap {
 
         // Update positions of default elements based on new dimensions
         this.updateDefaultElementPositions(oldWidth, oldHeight);
+
+        // Redraw the grid
+        this.gridDraw();
     }
 
     /**
@@ -1638,7 +1641,7 @@ export default class metromap {
             const endLine = { x: x + 30, y: y };
 
             // Draw a new line on the canvas
-            this.drawLineOnCanvas(startLine, endLine, config.metrolineConfig.defaultColor);
+            this.drawLineOnCanvas(startLine, endLine, this.metromapdesigner.currentMetrolineColor);
 
             // Return the newly created line
             return this.lines[0];
@@ -1670,6 +1673,7 @@ export default class metromap {
 
         // Check if it is found
         if(stationSelected) {
+            this.unselectAllStations();
             this.selectStation(stationSelected);
             return stationSelected;
         } else {
@@ -1952,6 +1956,7 @@ export default class metromap {
                     const stationLineLayer = this.getStationLineLayer(metroline);
                     stationData.x = stationData.position.x;
                     stationData.y = stationData.position.y;
+                    stationData.metrolineid = stationData.metroLines[0]; 
 
                     const newStation = new metromapStation(this, stationLineLayer, null, stationData);
                     this.stations.push(newStation);

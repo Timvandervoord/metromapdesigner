@@ -307,6 +307,7 @@ export default class metromapStation {
     setDate(value) {
         this.date = value;
         this.updateSVG();
+        this.render(); // rerender the station
     }
 
     /**
@@ -895,43 +896,47 @@ export default class metromapStation {
      * @returns {Array<SVGElement>} An array of `<tspan>` elements representing the wrapped text.
      */
     wrapStationNameText(text, x = 0, y = 0) {
-        if (!text || typeof text !== "string") {
+        if (typeof text !== "string") {
             throw new Error("wrapStationNameText: Invalid input text.");
         }
-    
-        // Split the text into words for wrapping
-        const words = text.split(/\s+/);
+
+        // Always output at least one tspan, even for empty text
         const tspans = [];
-        let currentLine = "";
         let numRule = 0;
-    
-        // Process each word and wrap text into lines
-        words.forEach((word, index) => {
-            const testLine = `${currentLine} ${word}`.trim();
-    
-            // Check if the current line exceeds the maximum allowed character length
-            if (testLine.length > config.stationVisualConfig.stationMaxNameCharLength && index > 0) {
-                // Create a <tspan> element for the current line
-                tspans.push(helpers.createTspanElement(currentLine, x, y, numRule));
-                currentLine = word; // Start a new line with the current word
-                numRule++;
-            } else {
-                currentLine = testLine;
+        let lines = [];
+
+        if (text.trim() === "") {
+            lines = [""];
+        } else {
+            // Split the text into words for wrapping
+            const words = text.split(/\s+/);
+            let currentLine = "";
+            words.forEach((word, index) => {
+                const testLine = `${currentLine} ${word}`.trim();
+                if (testLine.length > config.stationVisualConfig.stationMaxNameCharLength && index > 0) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            });
+            if (currentLine !== "") {
+                lines.push(currentLine);
             }
-        });
-    
-        // Add the last line if any
-        if (currentLine) {
-            tspans.push(helpers.createTspanElement(currentLine, x, y, numRule));
         }
-    
+
+        // Create tspans for each line
+        lines.forEach((line, idx) => {
+            tspans.push(helpers.createTspanElement(line, x, y, numRule + idx));
+        });
+
         // Adjust the `dy` attribute for vertical spacing
         let dy = -(tspans.length * config.stationVisualConfig.stationNameLineHeight) * 0.25;
         tspans.forEach((tspan) => {
             tspan.setAttribute("dy", `${dy}px`);
             dy += config.stationVisualConfig.stationNameLineHeight;
         });
-    
+
         return tspans;
     }
 
@@ -961,7 +966,7 @@ export default class metromapStation {
      * 
      * @param {number} angle - The angle (in degrees) to rotate the station.
      */
-    setStationRotation(angle = 0) {
+    setStationRotation(angle = 0, temp = false) {
         // Helper function to determine the offset for text
         const getOffsetText = (shape, size, offsetConfig = {}, inverse) => {
             // Use defaults if offsetConfig is undefined or missing properties
@@ -1054,8 +1059,10 @@ export default class metromapStation {
         this.refSvg.setAttribute("transform", `${translate} rotate(${finalAngle})`);
     
         // Save requested orientation
-        this.orientation = angle;
-        this.refSvg.setAttribute("stationorientation", angle);
+        if(!temp) {
+            this.orientation = angle;
+            this.refSvg.setAttribute("stationorientation", angle);
+        }
     }
 
     /**
@@ -1093,7 +1100,7 @@ export default class metromapStation {
         const angle = Number(this.orientation) || 0;
 
         // Temporarily set the station rotation to 0 for accurate measurements
-        this.setStationRotation(0);
+        this.setStationRotation(0, true);
 
         // Get the button and temporarily hide it
         const stationLinkElement = this.stationButtonLayer.querySelector("a.stationLink");
@@ -1131,9 +1138,9 @@ export default class metromapStation {
             date: this.date,
             type: this.type,
             position: { x: this.x, y: this.y },
-            orientation: this.orientation,
+            orientation: Number(this.orientation),
             shape: this.shape,
-            width: this.width,
+            width: Number(this.width),
             description: this.description,
             link: this.link,
             metroLines: this.metrolines.map(metroline => metroline.getId()),

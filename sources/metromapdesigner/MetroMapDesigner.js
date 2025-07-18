@@ -72,6 +72,7 @@ export default class MetroMapDesigner {
           this.container = containerElement;
           this.importExport = new MetromapImportExport();
           this.stateManager = new stateManager(config.applicationConfig.maxStateStackSize, true);
+          this.currentMetrolineColor = config.metrolineConfig.defaultColor;
     }
 
     /**
@@ -320,9 +321,6 @@ export default class MetroMapDesigner {
 
       // Set new width and height
       this.map.setDimensions(width, height);
-
-      // Redraw grid
-      this.map.gridDraw();
     }
 
     /**
