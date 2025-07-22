@@ -262,21 +262,33 @@ export function getMousePos(evt, map) {
    * @returns {string} The color in RGB format.
    */
   export function convertToRgb(color) {
-    // Function to check RGB format
-    const isRGBFormat = (s) => /^rgb\((\d{1,3}), (\d{1,3}), (\d{1,3})\)$/.test(s) && s.match(/(\d{1,3})/g).every((n) => n >= 0 && n <= 255);
+    // Function to check RGB format, allowing optional spaces
+    const isRGBFormat = (s) =>
+      /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/.test(s) &&
+      s.match(/(\d{1,3})/g).every((n) => n >= 0 && n <= 255);
+
+    // Function to check HEX color (3 or 6 digits)
     const isHexColor = (s) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
-  
-    // If it is in format return color other wise convert and return
+
+    // Already RGB, just return normalized string
     if (isRGBFormat(color)) {
-      return color;
+      return color.replace(/\s+/g, "");
     }
-  
-    // if hexidecimal, convert and return
+
+    // Convert hexadecimal to RGB
     if (isHexColor(color)) {
-      let r = parseInt(color.slice(1, 3), 16);
-      let g = parseInt(color.slice(3, 5), 16);
-      let b = parseInt(color.slice(5, 7), 16);
-  
+      let r, g, b;
+      if (color.length === 4) {
+        // 3 digit hex (#abc => #aabbcc)
+        r = parseInt(color[1] + color[1], 16);
+        g = parseInt(color[2] + color[2], 16);
+        b = parseInt(color[3] + color[3], 16);
+      } else {
+        r = parseInt(color.slice(1, 3), 16);
+        g = parseInt(color.slice(3, 5), 16);
+        b = parseInt(color.slice(5, 7), 16);
+      }
+
       return `rgb(${r}, ${g}, ${b})`;
     }
 
