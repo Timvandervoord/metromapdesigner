@@ -47,12 +47,6 @@ export default class metromap {
     legendaLayer;
 
     /**
-     * @property {SVGGElement} logoLayer
-     * @description SVG `<g>` element representing the logo layer.
-     */
-    logoLayer;
-
-    /**
      * @property {SVGGElement} legendaStationsLayer
      * @description SVG `<g>` element representing the legend layer for station types.
      */
@@ -202,7 +196,6 @@ export default class metromap {
         this.stationLayer = map.getElementById("stations") || throwLayerError("stations");
         this.overlayLayer = map.getElementById("overlay") || throwLayerError("overlay");
         this.legendaLayer = map.getElementById("legenda") || throwLayerError("legenda");
-        this.logoLayer = map.getElementById("logo") || throwLayerError("logo");
         this.legendaStationsLayer = map.getElementById("legendaStations") || throwLayerError("legendaStations");
         this.gridLayer = map.getElementById("gridLayer");
         this.titleText = map.getElementById("titleText") || throwLayerError("titleText");
@@ -434,6 +427,7 @@ export default class metromap {
      * smooth dragging. The element(s) are marked as active for dragging.
      */
     prepareMoveCanvasElement(elements, currentPosition) {
+
         if (!Array.isArray(elements)) {
             elements = [elements];
         }
@@ -540,15 +534,18 @@ export default class metromap {
      * @description Parses the current metro map to update the list of metroline colors.
      */
     metroMapRecreateColorTable() {
-        this.metrolineColors = []; // Empty array
+        // Use DOM batching for better performance when updating legend
+        helpers.batchDOMUpdate('colorTable', () => {
+            this.metrolineColors = []; // Empty array
 
-        // Refill it
-        this.lines.forEach((line) => {
-            let color = line.getColor();
-            if (!this.metrolineColors.includes(color)) {
-                this.metrolineColors.push(color); // Add the color if it's not already in the array
-            }
-        });
+            // Use Set for better performance with unique colors
+            const colorSet = new Set();
+            this.lines.forEach((line) => {
+                colorSet.add(line.getColor());
+            });
+            
+            this.metrolineColors = Array.from(colorSet);
+        }, 'medium');
     }
 
     /**
@@ -586,7 +583,7 @@ export default class metromap {
      *
      * @description
      * This function adjusts the positions of key elements on the SVG map, such as the legenda,
-     * station types legenda, and logo, based on the difference between the old and new map dimensions.
+     * station types legenda based on the difference between the old and new map dimensions.
      * It ensures that these elements remain in their intended locations relative to the resized map.
      */
     updateDefaultElementPositions(oldWidth, oldHeight) {
@@ -605,10 +602,6 @@ export default class metromap {
             let newLegendaStationsX = newWidth - (oldWidth - Number(legendaStationTypesPoints[0]));
             let newLegendaStationsY = newHeight - (oldHeight - Number(legendaStationTypesPoints[1]));
             helpers.setTranslate(this.legendaStationsLayer, newLegendaStationsX, newLegendaStationsY);
-    
-            // Reposition the logo
-            let newLogoX = newWidth - oldWidth;
-            helpers.setTranslateOffset(this.logoLayer, newLogoX, 0);
     }
 
 
@@ -676,6 +669,9 @@ export default class metromap {
         this.gridLayer = helpers.createSvgElement("g", { id: "gridLayer" });
         const gridSize = config.gridConfig.size;
 
+        // Use DocumentFragment for batch DOM operations
+        const fragment = document.createDocumentFragment();
+
         // Helper function to create an SVG line
         const drawLine = (x1, y1, x2, y2) => {
             return helpers.createSvgElement("line", { 
@@ -688,19 +684,25 @@ export default class metromap {
             });
         };
 
-        // Draw vertical lines
+        // Batch create vertical lines
+        const verticalLines = [];
         for (let x = 0; x <= this.svgMap.clientWidth; x += gridSize) {
-            this.gridLayer.appendChild(
-                drawLine(x, 0, x, this.getHeight())
-            );
+            verticalLines.push(drawLine(x, 0, x, this.getHeight()));
         }
 
-        // Draw horizontal lines
+        // Batch create horizontal lines
+        const horizontalLines = [];
         for (let y = 0; y <= this.svgMap.clientHeight; y += gridSize) {
-            this.gridLayer.appendChild(
-                drawLine(0, y, this.getWidth(), y)
-            );
+            horizontalLines.push(drawLine(0, y, this.getWidth(), y));
         }
+
+        // Add all lines to fragment in one batch
+        [...verticalLines, ...horizontalLines].forEach(line => {
+            fragment.appendChild(line);
+        });
+
+        // Single DOM append operation
+        this.gridLayer.appendChild(fragment);
 
         // Insert the grid layer at the bottom of the SVG map's child nodes
         this.svgMap.insertBefore(this.gridLayer, this.svgMap.firstChild || null);
@@ -764,16 +766,19 @@ export default class metromap {
         // Add it to the map
         this.stations.push(station);
 
-        // We need to give the browser some time to update the station on screen
-        setTimeout(() => {
-            // update connection metroline ids
-            if(station.getShape() === "connection") {
-                 this.updateStationMetrolineIds(station, true);
-            }
-            // Run hooks for the 'newStation' event
-            this.runHooks('newStation', station);
-            this.selectStation(station);
-        }, 500); // 0.5 seconds delay
+        // Use requestAnimationFrame for smoother UI updates
+        requestAnimationFrame(() => {
+            // Allow DOM to update, then process station
+            requestAnimationFrame(() => {
+                // update connection metroline ids
+                if(station.getShape() === "connection") {
+                     this.updateStationMetrolineIds(station, true);
+                }
+                // Run hooks for the 'newStation' event
+                this.runHooks('newStation', station);
+                this.selectStation(station);
+            });
+        });
 
         return station;
     }
@@ -1009,10 +1014,17 @@ export default class metromap {
             return;
         }
 
-        // Iterate through all stations and update their metroline IDs
-        this.stations.forEach((station) => {
-            this.updateStationMetrolineIds(station);
-        });
+        // Batch station updates for better performance
+        helpers.batchDOMUpdate('allStationUpdates', () => {
+            // Process stations in chunks to avoid blocking UI
+            const chunkSize = 10;
+            for (let i = 0; i < this.stations.length; i += chunkSize) {
+                const chunk = this.stations.slice(i, i + chunkSize);
+                chunk.forEach((station) => {
+                    this.updateStationMetrolineIds(station);
+                });
+            }
+        }, 'low');
     }
 
     /**
@@ -1966,10 +1978,12 @@ export default class metromap {
             // Recreate color table
             this.metroMapRecreateColorTable();
 
-            // Update metroline ids
-            setTimeout(() => {
-                this.updateAllStationMetrolineIds();
-            }, 500); // 0.5 seconds delay
+            // Update metroline ids with RAF for better performance
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.updateAllStationMetrolineIds();
+                });
+            });
 
         } catch (error) {
             console.error("Error importing metro map from JSON:", error);

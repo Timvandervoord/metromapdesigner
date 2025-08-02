@@ -5,6 +5,208 @@ import * as config from './config.js';
 const svgNS = "http://www.w3.org/2000/svg";
 
 /**
+ * Enables inline text editing for an SVG text or tspan element using foreignObject.
+ * Creates a transparent input field that matches the original text styling perfectly.
+ *
+ * @param {SVGTextElement|SVGTSpanElement} textElement - The text element to edit.
+ * @param {Object} options - Configuration options.
+ * @param {Function} [options.onSave] - Callback function called after saving changes.
+ * @param {Object} [options.stateManager] - State manager for undo functionality.
+ * @param {Object} [options.map] - Map object for legend updates.
+ */
+export function enableInlineTextEditing(textElement, options = {}) {
+  const { onSave, stateManager, map } = options;
+  
+  // Prevent multiple inline editors for the same element
+  if (textElement.dataset.editing === 'true') {
+    return;
+  }
+  textElement.dataset.editing = 'true';
+
+  // Get the owning SVG element
+  const svg = textElement.ownerSVGElement;
+  if (!svg) {
+    console.error("No owner SVG element found.");
+    textElement.dataset.editing = 'false';
+    return;
+  }
+
+  // Get text bounding box and styling
+  const bbox = textElement.getBBox();
+  const parentText = textElement.tagName.toLowerCase() === "tspan" ? textElement.parentNode : textElement;
+  
+  // Helper function to parse transform values
+  const parseTransform = (transform) => {
+    if (!transform) return { x: 0, y: 0 };
+    
+    if (transform.includes('translate')) {
+      const match = transform.match(/translate\(([^)]+)\)/);
+      if (match) {
+        const values = match[1].split(/[,\s]+/).map(Number);
+        return { x: values[0] || 0, y: values[1] || 0 };
+      }
+    } else if (transform.includes('matrix')) {
+      const match = transform.match(/matrix\(([^)]+)\)/);
+      if (match) {
+        const values = match[1].split(' ').map(Number);
+        return { x: values[4] || 0, y: values[5] || 0 };
+      }
+    }
+    return { x: 0, y: 0 };
+  };
+
+  // Calculate position - simplified approach
+  const isTspan = textElement.tagName.toLowerCase() === "tspan";
+  let x = bbox.x;
+  let y = bbox.y;
+  
+  // Add transforms from element hierarchy
+  let element = isTspan ? textElement.parentNode : textElement;
+  while (element && element !== svg) {
+    const transform = parseTransform(element.getAttribute('transform'));
+    x += transform.x;
+    y += transform.y;
+    element = element.parentNode;
+  }
+  
+  // Add tspan relative positioning
+  if (isTspan) {
+    x += parseFloat(textElement.getAttribute('dx') || '0');
+    y += parseFloat(textElement.getAttribute('dy') || '0');
+  }
+  
+  // Apply positioning offset for pixel-perfect alignment
+  x -= 3;
+  y -= 4;
+  
+  const width = Math.max(bbox.width + 20, 80);
+  const height = Math.max(bbox.height + 8, 20);
+  
+  // Hide the original text during editing
+  const originalOpacity = textElement.style.opacity || '1';
+  textElement.style.opacity = '0';
+
+  // Create foreignObject for inline editing
+  const foreignObject = document.createElementNS(svgNS, "foreignObject");
+  foreignObject.setAttribute("x", x);
+  foreignObject.setAttribute("y", y);
+  foreignObject.setAttribute("width", width);
+  foreignObject.setAttribute("height", height);
+
+  // Create input element inside foreignObject with matching styling
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = textElement.textContent;
+  input.style.width = "100%";
+  input.style.height = "100%";
+  input.style.border = "none";
+  input.style.padding = "0";
+  input.style.margin = "0";
+  input.style.textIndent = "3px"; // Fine-tuned for perfect alignment
+  input.style.background = "transparent";
+  input.style.fontSize = parentText.getAttribute("font-size") || parentText.style.fontSize || "16px";
+  input.style.fontFamily = parentText.getAttribute("font-family") || parentText.style.fontFamily || "Arial";
+  input.style.fontWeight = parentText.getAttribute("font-weight") || parentText.style.fontWeight || "normal";
+  input.style.color = parentText.getAttribute("fill") || parentText.style.color || "#000";
+  input.style.outline = "none";
+  input.style.boxSizing = "border-box";
+  input.style.zIndex = "1000";
+  input.style.minWidth = `${width}px`;
+  input.style.textAlign = parentText.getAttribute("text-anchor") === "middle" ? "center" : 
+                          parentText.getAttribute("text-anchor") === "end" ? "right" : "left";
+
+  // Auto-resize function to grow input with text
+  const resizeInput = () => {
+    const tempSpan = document.createElement('span');
+    tempSpan.style.fontSize = input.style.fontSize;
+    tempSpan.style.fontFamily = input.style.fontFamily;
+    tempSpan.style.fontWeight = input.style.fontWeight;
+    tempSpan.style.visibility = 'hidden';
+    tempSpan.style.position = 'absolute';
+    tempSpan.style.whiteSpace = 'nowrap';
+    tempSpan.textContent = input.value || input.placeholder || '';
+    
+    document.body.appendChild(tempSpan);
+    const textWidth = tempSpan.offsetWidth;
+    document.body.removeChild(tempSpan);
+    
+    const newWidth = Math.max(textWidth + 10, width);
+    foreignObject.setAttribute('width', newWidth);
+  };
+
+  let isRemoved = false;
+
+  const saveChanges = () => {
+    if (isRemoved) return;
+    isRemoved = true;
+    
+    try {
+      if (stateManager && map) {
+        stateManager.saveState(map);
+      }
+      textElement.textContent = input.value;
+      onSave?.();
+      if (map?.legenda) {
+        map.legenda.updateLegenda();
+        map.legenda.resize();
+      }
+    } catch (error) {
+      console.error("Error saving text changes:", error);
+    } finally {
+      cleanup();
+    }
+  };
+
+  const cleanup = () => {
+    if (originalOpacity === '1' || originalOpacity === '') {
+      textElement.style.opacity = '';
+    } else {
+      textElement.style.opacity = originalOpacity;
+    }
+    if (foreignObject.parentNode) {
+      foreignObject.remove();
+    }
+    textElement.dataset.editing = 'false';
+  };
+
+  const cancelChanges = () => {
+    if (isRemoved) return;
+    isRemoved = true;
+    cleanup();
+  };
+
+  // Event listeners
+  input.addEventListener("mousedown", (event) => event.stopPropagation());
+  input.addEventListener("click", (event) => event.stopPropagation());
+  input.addEventListener("blur", saveChanges);
+  input.addEventListener("input", resizeInput);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveChanges();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelChanges();
+    }
+    event.stopPropagation();
+    setTimeout(resizeInput, 0);
+  });
+
+  try {
+    foreignObject.appendChild(input);
+    svg.appendChild(foreignObject);
+    
+    input.focus();
+    input.select();
+    resizeInput();
+  } catch (error) {
+    console.error("Error creating inline text editor:", error);
+    textElement.style.opacity = originalOpacity;
+    textElement.dataset.editing = 'false';
+  }
+}
+
+/**
  * Creates an SVG element with specified attributes.
  *
  * @param {string} tag - The SVG tag name to create.
@@ -158,10 +360,15 @@ export function parseTransform(transformStr) {
  * @returns {Object} An object with x and y coordinates.
  */
 let mouseRecentlyUsed = false;
+let lastKnownPosition = { x: 0, y: 0 }; // Store last known position to avoid circular dependency
+
 export function getMousePos(evt, map) {
     let x, y;
     let svgElement = map.getCanvas();
-    if (!svgElement) return { x: 0, y: 0 }; // Default to origin if no SVG element is found
+    if (!svgElement) {
+        console.warn('getMousePos: No SVG element found, returning last known position');
+        return { ...lastKnownPosition }; // Return copy of last known position
+    }
   
     // Is this a touch interface or normal mouse interface?
     var isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
@@ -173,30 +380,68 @@ export function getMousePos(evt, map) {
         mouseRecentlyUsed = false;
       }, 2000); // reset after 2 seconds of inactivity
     } else if (mouseRecentlyUsed) {
-      return; // ignore touch events if a mouse event has recently occurred
+      // Return last known position instead of undefined
+      return { ...lastKnownPosition };
     }
   
     if (!isTouchDevice || mouseRecentlyUsed) {
-      x = evt.clientX;
-      y = evt.clientY;
+      x = evt.clientX || 0;
+      y = evt.clientY || 0;
     } else {
       evt.preventDefault(); // prevent default behavior like scrolling
       var touch = evt.touches[0];
-      x = typeof touch !== "undefined" ? touch.clientX : map.mousePosition.x; // on touch interfaces, clientX or Y are not set on touchEnd event, use last known
-      y = typeof touch !== "undefined" ? touch.clientY : map.mousePosition.y;
+      // Use lastKnownPosition instead of map.mousePosition to avoid circular dependency
+      x = typeof touch !== "undefined" ? touch.clientX : lastKnownPosition.x;
+      y = typeof touch !== "undefined" ? touch.clientY : lastKnownPosition.y;
+    }
+
+    // Validate coordinates
+    if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
+        console.warn('getMousePos: Invalid coordinates detected, using last known position');
+        return { ...lastKnownPosition };
     }
   
-    var point = svgElement.createSVGPoint();
-    point.x = x;
-    point.y = y;
-  
-    var transform = point.matrixTransform(svgElement.getScreenCTM().inverse());
-  
-    return {
-      x: transform.x,
-      y: transform.y,
-    };
-  }
+    try {
+        var point = svgElement.createSVGPoint();
+        point.x = x;
+        point.y = y;
+      
+        // Get screen CTM with null check
+        var screenCTM = svgElement.getScreenCTM();
+        if (!screenCTM) {
+            console.warn('getMousePos: getScreenCTM returned null, using fallback calculation');
+            // Fallback: try to get bounding rect and calculate relative position
+            const rect = svgElement.getBoundingClientRect();
+            const relativeX = x - rect.left;
+            const relativeY = y - rect.top;
+            
+            // Store and return the position
+            lastKnownPosition = { x: relativeX, y: relativeY };
+            return { ...lastKnownPosition };
+        }
+      
+        var transform = point.matrixTransform(screenCTM.inverse());
+        
+        // Validate transform result
+        if (typeof transform.x !== 'number' || typeof transform.y !== 'number' || 
+            isNaN(transform.x) || isNaN(transform.y)) {
+            console.warn('getMousePos: Transform resulted in invalid coordinates');
+            return { ...lastKnownPosition };
+        }
+        
+        // Store successful position for future fallbacks
+        lastKnownPosition = { x: transform.x, y: transform.y };
+      
+        return {
+          x: transform.x,
+          y: transform.y,
+        };
+    } catch (error) {
+        console.error('getMousePos: Error during coordinate transformation:', error);
+        // Return last known good position
+        return { ...lastKnownPosition };
+    }
+}
 
   /**
    * Creates a <tspan> SVG element with the specified text and attributes.
@@ -331,28 +576,25 @@ export function getMousePos(evt, map) {
    * @returns {SVGElement|null} - The nearest editable SVG element, or `null` if none is found.
    */
   export function determineEditableElement(element) {
-    const validIds = ["academyName", "titleText1", "titleText2", "legenda", "legendaStations", "logo", "stationGroup", "metroLineName", "metroLineTargetGroup"];
+    const validIds = ["academyName", "titleText", "legenda", "legendaStations"];
 
     // Traverse up the DOM tree
     while (element instanceof SVGElement) {
-        const elClass = element.getAttribute("class");
-        const elTag = element.tagName.toLowerCase();
-        const elId = element.id;
+        const elementClass = element.getAttribute("class");
+        const tagName = element.tagName.toLowerCase();
 
-        // Check for station group
-        if (elClass === "stationGroup") return element;
-
-        // Check for metrolines (polylines that are not legenda polylines)
-        if (elTag === "polyline" && elClass !== "legendaPolyline") return element;
-
-        // Check for known IDs
-        if (validIds.includes(elId)) return element;
+        // Check for editable element types
+        if (elementClass === "stationGroup" || 
+            tagName === "image" || 
+            (tagName === "polyline" && elementClass !== "legendaPolyline") ||
+            validIds.includes(element.id)) {
+            return element;
+        }
 
         // Move up one level in the DOM
         element = element.parentNode;
     }
 
-    // Return null if no editable element is found
     return null;
   }
 
@@ -404,6 +646,116 @@ export function getMousePos(evt, map) {
             setTimeout(() => (inThrottle = false), limit);
         }
     };
+  }
+
+  /**
+   * DOM Update Batching System
+   * Collects multiple DOM operations and executes them in batches for better performance
+   */
+  class DOMBatcher {
+    constructor() {
+        this.pendingUpdates = new Map();
+        this.isScheduled = false;
+        this.frameId = null;
+    }
+
+    /**
+     * Adds a DOM update operation to the batch queue
+     * @param {string} key - Unique identifier for the operation
+     * @param {Function} operation - The DOM operation to execute
+     * @param {string} priority - 'high', 'medium', 'low'
+     */
+    batch(key, operation, priority = 'medium') {
+        this.pendingUpdates.set(key, {
+            operation,
+            priority,
+            timestamp: performance.now()
+        });
+
+        if (!this.isScheduled) {
+            this.scheduleBatch();
+        }
+    }
+
+    scheduleBatch() {
+        this.isScheduled = true;
+        this.frameId = requestAnimationFrame(() => {
+            this.executeBatch();
+        });
+    }
+
+    executeBatch() {
+        if (this.pendingUpdates.size === 0) {
+            this.isScheduled = false;
+            return;
+        }
+
+        // Sort by priority: high > medium > low
+        const operations = Array.from(this.pendingUpdates.entries())
+            .sort(([, a], [, b]) => {
+                const priorities = { high: 3, medium: 2, low: 1 };
+                return priorities[b.priority] - priorities[a.priority];
+            });
+
+        const startTime = performance.now();
+        const maxBatchTime = 16; // ~60fps budget
+
+        for (const [key, { operation }] of operations) {
+            try {
+                operation();
+                this.pendingUpdates.delete(key);
+
+                // Yield if taking too long
+                if (performance.now() - startTime > maxBatchTime) {
+                    break;
+                }
+            } catch (error) {
+                console.error(`DOM batch operation failed for key: ${key}`, error);
+                this.pendingUpdates.delete(key);
+            }
+        }
+
+        this.isScheduled = false;
+        if (this.pendingUpdates.size > 0) {
+            this.scheduleBatch();
+        }
+    }
+
+    flush() {
+        if (this.frameId) {
+            cancelAnimationFrame(this.frameId);
+        }
+        this.isScheduled = false;
+        this.executeBatch();
+    }
+
+    clear() {
+        if (this.frameId) {
+            cancelAnimationFrame(this.frameId);
+        }
+        this.pendingUpdates.clear();
+        this.isScheduled = false;
+    }
+  }
+
+  // Global DOM batcher instance
+  const domBatcher = new DOMBatcher();
+
+  /**
+   * Batches DOM operations for better performance
+   * @param {string} key - Unique identifier for the operation
+   * @param {Function} operation - The DOM operation to execute
+   * @param {string} priority - 'high', 'medium', 'low'
+   */
+  export function batchDOMUpdate(key, operation, priority = 'medium') {
+    domBatcher.batch(key, operation, priority);
+  }
+
+  /**
+   * Flushes all pending DOM operations immediately
+   */
+  export function flushDOMUpdates() {
+    domBatcher.flush();
   }
 
   /**
@@ -624,6 +976,39 @@ export function samplePointsOnPolygonEdges(vertices, step) {
   }
 
   return sampledPoints;
+}
+
+/**
+ * Sanitizes SVG content to allow only specific tags and attributes safe for metro maps.
+ * Prevents XSS attacks while preserving legitimate SVG functionality.
+ * 
+ * @param {string} content - The raw SVG content to sanitize.
+ * @returns {string} - The sanitized SVG content safe for innerHTML.
+ * @throws {Error} - Throws an error if DOMPurify is not available or sanitization fails.
+ */
+export function sanitizeMapContent(content) {
+    // Check if DOMPurify is available
+    if (typeof DOMPurify === 'undefined') {
+        console.error('DOMPurify is not available. SVG content cannot be sanitized.');
+        throw new Error('Security library not available. Cannot load untrusted SVG content.');
+    }
+
+    try {
+        const sanitized = DOMPurify.sanitize(content, {
+            ALLOWED_TAGS: config.applicationConfig.METROMAP_DESIGNER_MAP_TAGS,
+            ALLOWED_ATTR: config.applicationConfig.METROMAP_DESIGNER_MAP_ATTRIBUTES
+        });
+
+        // Validate the sanitized result
+        if (!sanitized || sanitized.trim().length === 0) {
+            throw new Error('SVG content was completely removed during sanitization');
+        }
+
+        return sanitized;
+    } catch (error) {
+        console.error('Error sanitizing SVG content:', error);
+        throw new Error(`Failed to sanitize SVG content: ${error.message}`);
+    }
 }
 
 

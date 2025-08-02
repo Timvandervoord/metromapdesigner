@@ -3,6 +3,7 @@ import MetromapImportExport from './classes/importexport.js';
 import stateManager from './classes/stateManager.js';
 import * as helpers from './common.js';
 import * as config from './config.js';
+import { enableInlineTextEditing as enableTextEditing } from './common.js';
 
 /**
  * @class
@@ -44,6 +45,7 @@ export default class MetroMapDesigner {
     defaultMap; // Contains svg code of a default map for clearing of the map
     importExport; // Reference to importExport instance
     stateManager; // Refernece to the statemanager
+    currentSvgElement; // Reference to current SVG element for event cleanup
 
     // Working data
     currentMetrolineColor     = "rgb(240, 137, 0)";
@@ -51,12 +53,24 @@ export default class MetroMapDesigner {
     currentMetrolineDrawing   = null;
     selectedTool              = "metrolineTool";
     mousePosition             = {};
+    
+    // Loading state management
+    isLoadingMap              = false;
+    loadingOperations         = new Set(); // Track concurrent operations
 
     // Keep track of what item we are dragging or drawing around the canvas
     draggingStation = false;
     draggingElement = false;
     draggingMetroline = false;
     drawingLine = false;
+    scalingImage = null;
+    movingImage = null;
+    currentSelectedImage = null;
+    resizeHandles = null;
+    currentResizeHandle = null;
+    initialMousePosition = null;
+    imageTransform = null;
+    imageCenter = null;
 
     // CONSTRUCTOR AND INITIALIZATION
 
@@ -73,6 +87,33 @@ export default class MetroMapDesigner {
           this.importExport = new MetromapImportExport();
           this.stateManager = new stateManager(config.applicationConfig.maxStateStackSize, true);
           this.currentMetrolineColor = config.metrolineConfig.defaultColor;
+          this.currentSvgElement = null;
+    }
+
+    /**
+     * Destructor method to clean up resources and prevent memory leaks.
+     *
+     * @description
+     * This method should be called when the MetroMapDesigner instance is no longer needed.
+     * It removes all event listeners and clears references to prevent memory leaks.
+     */
+    destroy() {
+        // Remove event listeners
+        this.removeMapEventListeners();
+        
+        // Clear references
+        this.map = null;
+        this.stateManager = null;
+        this.importExport = null;
+        this.container = null;
+        this.defaultMap = null;
+        
+        // Clear hooks
+        if (this.hooks) {
+            Object.keys(this.hooks).forEach(key => {
+                this.hooks[key] = [];
+            });
+        }
     }
 
     /**
@@ -85,23 +126,56 @@ export default class MetroMapDesigner {
      * These handlers manage actions such as drawing, selecting, or manipulating elements on the map.
      */
     setMapEventListeners() {
+      // Remove existing event listeners first to prevent memory leaks
+      this.removeMapEventListeners();
+
       // Set SVG element reference
       const svgelement = this.container.querySelector("svg");
       if (!svgelement) {
         throw new Error("SVG element not found in the container.");
       }
 
+      // Store reference for cleanup
+      this.currentSvgElement = svgelement;
+
       // Attach mouse and touch event listeners
       svgelement.addEventListener("mousedown", this.mouseDownCanvas);
       svgelement.addEventListener("touchstart", this.mouseDownCanvas);
-      svgelement.addEventListener("touchstart", this.mouseClickCanvas); // Duplicate touchstart for mouseClickCanvas
+      // Fixed: Remove duplicate touchstart listener that was causing double events
       svgelement.addEventListener("mousemove", this.mouseMoveCanvas);
       svgelement.addEventListener("touchmove", this.mouseMoveCanvas);
       svgelement.addEventListener("mouseup", this.mouseUpCanvas);
       svgelement.addEventListener("touchend", this.mouseUpCanvas);
       svgelement.addEventListener("mouseleave", this.mouseUpCanvas);
-      svgelement.addEventListener("touchCancel", this.mouseUpCanvas);
+      svgelement.addEventListener("touchcancel", this.mouseUpCanvas); // Fixed: lowercase 'c'
       svgelement.addEventListener("click", this.mouseClickCanvas);
+    }
+
+    /**
+     * Removes event listeners from the current SVG element to prevent memory leaks.
+     *
+     * @description
+     * This function should be called before replacing the SVG content to ensure
+     * that event listeners attached to the old SVG element are properly cleaned up.
+     */
+    removeMapEventListeners() {
+      if (!this.currentSvgElement) {
+        return; // No SVG element to clean up
+      }
+
+      // Remove all event listeners that were added in setMapEventListeners
+      this.currentSvgElement.removeEventListener("mousedown", this.mouseDownCanvas);
+      this.currentSvgElement.removeEventListener("touchstart", this.mouseDownCanvas);
+      this.currentSvgElement.removeEventListener("mousemove", this.mouseMoveCanvas);
+      this.currentSvgElement.removeEventListener("touchmove", this.mouseMoveCanvas);
+      this.currentSvgElement.removeEventListener("mouseup", this.mouseUpCanvas);
+      this.currentSvgElement.removeEventListener("touchend", this.mouseUpCanvas);
+      this.currentSvgElement.removeEventListener("mouseleave", this.mouseUpCanvas);
+      this.currentSvgElement.removeEventListener("touchcancel", this.mouseUpCanvas);
+      this.currentSvgElement.removeEventListener("click", this.mouseClickCanvas);
+
+      // Clear the reference
+      this.currentSvgElement = null;
     }
 
     // Hooks and state management
@@ -113,7 +187,8 @@ export default class MetroMapDesigner {
     hooks = {
           draggingStation: [],
           draggingLine: [],
-          mapLoaded: []
+          mapLoaded: [],
+          loadingStateChanged: []
     };
 
     /**
@@ -155,7 +230,8 @@ export default class MetroMapDesigner {
     undo() {
       const prevState = this.stateManager.revertState(this.map);
       if (prevState) {
-        this.loadMap(prevState);
+        // Undo state is trusted - no sanitization needed
+        this.loadMap(prevState, true);
       }
     }
 
@@ -250,13 +326,57 @@ export default class MetroMapDesigner {
       if (shape) this.setDefaultStationShape(shape);
 
       // Deselect all stations on the map
-      this.map.unselectAllStations();
+      if (this.map) {
+        this.map.unselectAllStations();
+      }
+
+      // Clean up resize handles when switching away from moveTool
+      if (name !== "moveTool") {
+        this.removeResizeHandles();
+      }
 
       // Update the selected tool
       this.selectedTool = name;
 
-      // Change the cursor style
-      this.container.style.cursor = `url('images/tools/${cursor}.cur'), auto`;
+      // Change the cursor style with fallbacks for better browser compatibility
+      this.setCursor(cursor);
+    }
+
+    /**
+     * Sets the cursor style with multiple fallback options for better browser compatibility.
+     *
+     * @param {string} cursorName - The name of the cursor (e.g., "eraser", "pen", "move").
+     */
+    setCursor(cursorName) {
+      // Define cursor mappings with fallbacks
+      const cursorMap = {
+        eraser: ['url("images/tools/eraser.png") 8 8', 'url("images/tools/eraser.cur")', 'crosshair'],
+        pen: ['url("images/tools/pen.cur")', 'crosshair'],
+        move: ['url("images/tools/move.cur")', 'move'],
+        arrow: ['url("images/tools/arrow.cur")', 'pointer'],
+        text: ['url("images/tools/text.cur")', 'text']
+      };
+
+      // Get cursor options with fallbacks
+      const cursorOptions = cursorMap[cursorName] || ['crosshair'];
+      
+      // Set cursor with all fallback options
+      const cursorValue = cursorOptions.join(', ');
+      this.container.style.cursor = cursorValue;
+    }
+
+    /**
+     * Removes the style attribute from the loaded SVG element to prevent cursor conflicts.
+     * This ensures tool cursors work correctly without interfering with SVG content styling.
+     */
+    cleanSvgCursorStyles() {
+      const svgElement = this.container.querySelector("svg");
+      if (!svgElement) return;
+
+      // Remove the style attribute from the SVG element
+      if (svgElement.hasAttribute('style')) {
+        svgElement.removeAttribute('style');
+      }
     }
 
     /**
@@ -280,7 +400,8 @@ export default class MetroMapDesigner {
      * Clears the map by resetting it to the default map.
      */
     clearMap() {
-      this.loadMap(this.defaultMap);
+      // Default map is trusted - no sanitization needed
+      this.loadMap(this.defaultMap, true);
     }
 
     /**
@@ -290,6 +411,10 @@ export default class MetroMapDesigner {
      */
     gridToggle()
     {
+      if (!this.map) {
+        console.warn('gridToggle: No map available');
+        return;
+      }
       this.map.gridToggle();
     }
 
@@ -301,6 +426,10 @@ export default class MetroMapDesigner {
      * @returns {string} The title of the map.
      */
     getCanvasName() {
+          if (!this.map) {
+            console.warn('getCanvasName: No map available');
+            return 'Untitled Map';
+          }
           return this.map.getTitle();
     }
 
@@ -317,6 +446,12 @@ export default class MetroMapDesigner {
       
       if (typeof width !== "number" || typeof height !== "number")
         throw new Error("Invalid height and width supplied for GLOBAL_METROMAP_DESIGNER_WORKING_DATA.canvas");
+      
+      if (!this.map) {
+        console.warn('canvasChangeSize: No map available');
+        return;
+      }
+      
       this.map.gridRemove();
 
       // Set new width and height
@@ -324,16 +459,16 @@ export default class MetroMapDesigner {
     }
 
     /**
-     * Replaces the logo on the metro map with a new image.
+     * Adds an image to the metro map.
      * 
-     * This method validates the provided image data and updates the SVG elements
-     * to display the new logo. If the provided data is invalid, it logs an error.
+     * This method validates the provided image data and creates a new image element
+     * in the imageLayer. If the provided data is invalid, it logs an error.
      * 
-     * @param {string} data - The image data (URL or base64 string) to set as the logo.
+     * @param {string} data - The image data (URL or base64 string) to add as an image.
      */
-    metroMapReplaceLogo(data) {
+    metroMapAddImage(data) {
       if (!data || typeof data !== "string") {
-          console.error("Invalid data provided for logo replacement.");
+          console.error("Invalid data provided for image.");
           return;
       }
 
@@ -346,19 +481,22 @@ export default class MetroMapDesigner {
               // Save the current map state before changes
               this.stateManager.saveState(this.map);
 
-              // Find the logo elements
-              const imgLogo = this.container.querySelector("#imgLogo");
-              const svgLogo = this.container.querySelector("#svgLogo");
-
-              if (!imgLogo || !svgLogo) {
-                  console.error("Logo elements not found in the SVG.");
+              // Find the imageLayer
+              const imagesLayer = this.container.querySelector("#imageLayer");
+              if (!imagesLayer) {
+                  console.error("ImageLayer not found in the SVG.");
                   return;
               }
 
-              // Update the image logo and hide the SVG logo
-              imgLogo.setAttribute("href", data);
-              imgLogo.style.visibility = "visible";
-              svgLogo.style.visibility = "hidden";
+              // Create new image element
+              const newLogo = document.createElementNS("http://www.w3.org/2000/svg", "image");
+              newLogo.setAttribute("id", "imgLogo");
+              newLogo.setAttribute("href", data);
+              newLogo.setAttribute("transform", "translate(1100, 60)");
+              newLogo.setAttribute("height", "80px");
+              
+              // Add the new logo to the imageLayer
+              imagesLayer.appendChild(newLogo);
 
           } catch (error) {
               console.error("Error updating the metro map logo:", error);
@@ -372,6 +510,53 @@ export default class MetroMapDesigner {
 
       // Start loading the image data
       img.src = data;
+    }
+
+    /**
+     * Migrates old logo layer to new imageLayer structure.
+     * 
+     * This method checks for the old <g id="logo"> structure and converts it to the new
+     * <g id="imageLayer"> structure to maintain backward compatibility with old metro maps.
+     */
+    migrateLogoLayerToImages() {
+
+        if (!this.container) {
+            return;
+        }
+
+        const svg = this.container.querySelector("svg");
+        if (!svg) {
+            return;
+        }
+
+        const overlay = svg.querySelector("#overlay");
+        if (!overlay) {
+            return;
+        }
+
+        // Check if old logo layer exists
+        const oldLogoLayer = overlay.querySelector("#logo");
+        if (!oldLogoLayer) {
+            return; // No migration needed
+        }
+
+        // Rename the logo layer to imageLayer
+        oldLogoLayer.setAttribute("id", "imageLayer");
+        
+        // Convert any image children from x/y to transform
+        const imageChildren = oldLogoLayer.querySelectorAll('image');
+        imageChildren.forEach(child => {
+            const x = child.getAttribute('x');
+            const y = child.getAttribute('y');
+            
+            if (x !== null && y !== null) {
+                child.setAttribute('transform', `translate(${x}, ${y})`);
+                child.removeAttribute('x');
+                child.removeAttribute('y');
+            }
+        });
+
+        console.log("Migrated old logo layer to new imageLayer structure");
     }
 
     /**
@@ -391,8 +576,15 @@ export default class MetroMapDesigner {
           throw new Error('moveEveryThingAlongGrid called without a given direction');
       }
 
+      if (!this.map) {
+        console.warn('moveEveryThingAlongGrid: No map available');
+        return;
+      }
+
       // Save the current state of the map for undo/redo functionality
-      this.stateManager.saveState(this.map);
+      if (this.stateManager) {
+        this.stateManager.saveState(this.map);
+      }
 
       // Get the size of one grid unit
       const gridSize = config.gridConfig.size;
@@ -417,90 +609,17 @@ export default class MetroMapDesigner {
 
   /**
    * Enables inline text editing for an SVG <text> or <tspan> element.
-   * 
-   * This version uses the SVG coordinate system to correctly determine the element's
-   * screen position, even when the SVG is transformed.
+   * Uses the utility function from common.js for simplified and maintainable code.
    *
    * @param {SVGTextElement|SVGTSpanElement} textElement - The <text> or <tspan> element to edit.
-   * @param {HTMLElement} container - The container of the SVG element.
    * @param {Function} onSave - Callback function to call after saving changes.
    */
-  enableInlineTextEditing(textElement, container, onSave) {
-    // Determine the bounding box of the element in its own coordinate system
-    const bbox = textElement.getBBox();
-
-    // Get the owning SVG element (which holds the proper coordinate system)
-    const svg = textElement.ownerSVGElement;
-    if (!svg) {
-      console.error("No owner SVG element found.");
-      return;
-    }
-
-    // Create an SVGPoint at the top-left of the text element's bounding box
-    const point = svg.createSVGPoint();
-    point.x = bbox.x;
-    point.y = bbox.y;
-    
-    // Transform the point from the text element's coordinate space to screen coordinates.
-    // getScreenCTM() returns the matrix that maps the element's coordinates to screen coordinates.
-    const screenPoint = point.matrixTransform(textElement.getScreenCTM());
-
-    // Include the window scroll offsets to get absolute page coordinates.
-    const x = screenPoint.x + window.scrollX;
-    const y = screenPoint.y + window.scrollY;
-
-    // If the element is a <tspan>, fall back to its parent <text> for style attributes.
-    const parentText = textElement.tagName.toLowerCase() === "tspan" ? textElement.parentNode : textElement;
-
-    // Create an input element for inline editing.
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = textElement.textContent;
-
-    // Position and style the input element
-    input.style.position = "absolute";
-    input.style.left = `${x}px`;
-    // Adjust y by subtracting bbox.height to roughly align with the text baseline.
-    input.style.top = `${y}px`;
-    // Provide extra width for better usability.
-    input.style.width = `${bbox.width + 100}px`;
-    input.style.fontSize = `${parentText.getAttribute("font-size") || 16}px`;
-    input.style.fontFamily = `${parentText.getAttribute("font-family") || "Arial"}`;
-    input.style.border = "1px solid #ccc";
-    input.style.padding = "2px";
-    input.style.background = "#fff";
-    input.style.zIndex = "1000";
-    input.style.boxSizing = "border-box";
-
-    // Append the input element to the document.
-    document.body.appendChild(input);
-
-    // Stop propagation to prevent unwanted blur events.
-    input.addEventListener("mousedown", (event) => event.stopPropagation());
-    input.addEventListener("click", (event) => event.stopPropagation());
-
-    let isRemoved = false;
-
-    const saveChanges = () => {
-      if (isRemoved) return;
-      isRemoved = true;
-      // Assuming stateManager and map are defined in the context of this class
-      this.stateManager.saveState(this.map);
-      textElement.textContent = input.value; // Update the SVG text content
-      onSave?.();
-      input.remove();
-      this.map.legenda.updateLegenda();
-      this.map.legenda.resize();
-    };
-
-    // Focus the input after adding it to the DOM and bind event listeners.
-    setTimeout(() => {
-      input.focus();
-      input.addEventListener("blur", saveChanges);
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") saveChanges();
-      });
-    }, 0);
+  enableInlineTextEditing(textElement, onSave) {
+    enableTextEditing(textElement, {
+      onSave,
+      stateManager: this.stateManager,
+      map: this.map
+    });
   }
 
     // MOUSE EVENT HANDLERS
@@ -527,35 +646,90 @@ export default class MetroMapDesigner {
       const isStationGroup = (el) =>
         el instanceof SVGElement && el.getAttribute("class") === "stationGroup";
 
+      // Helper function to check if element is an image
+      const isImage = (el) =>
+        el instanceof SVGElement && el.tagName.toLowerCase() === "image";
+
       // Update mouse position
+      if (!this.map) {
+        console.warn('mouseDownCanvas: No map available');
+        return;
+      }
+      
       this.mousePosition = helpers.getMousePos(e, this.map);
 
       // Perform metroline drawing
       if(this.selectedTool === "metrolineTool") {
-          this.stateManager.saveState(this.map);
+          if (this.stateManager) {
+            this.stateManager.saveState(this.map);
+          }
           this.map.startDrawMetroline(this.mousePosition, this.currentMetrolineColor);
           this.drawingLine = true;
           return;
       }
 
+      // Check if clicked on a resize handle first
+      const resizePosition = this.getResizeHandlePosition(e.target);
+      if (resizePosition && this.selectedTool === "moveTool") {
+        // Find the currently selected image for resize handle
+        const currentImage = this.findCurrentSelectedImage();
+        if (currentImage) {
+          // Start resizing from handle
+          this.scalingImage = currentImage;
+          this.currentResizeHandle = resizePosition;
+          this.initialMousePosition = { ...this.mousePosition };
+          
+          // Get current transform values
+          const transform = currentImage.getAttribute('transform') || '';
+          const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+          const scaleMatch = transform.match(/scale\(([^)]+)\)/);
+          
+          this.imageTransform = {
+            translateX: translateMatch ? parseFloat(translateMatch[1]) : 0,
+            translateY: translateMatch ? parseFloat(translateMatch[2]) : 0,
+            scale: scaleMatch ? parseFloat(scaleMatch[1]) : 1
+          };
+          
+          return; // Exit early, we're handling resize
+        }
+      }
+
       // If no element is selected, exit early
       let selectedElement = helpers.determineEditableElement(e.target);
-      if(!selectedElement) return;
+      if(!selectedElement) {
+        // Remove resize handles when clicking on empty space
+        this.removeResizeHandles();
+        return;
+      }
 
       // What to do?
       switch (this.selectedTool) {
         case "eraserTool":
           if (isStationGroup(selectedElement)) {
               // Save state before changes
-              this.stateManager.saveState(this.map);
+              if (this.stateManager) {
+                this.stateManager.saveState(this.map);
+              }
               // Remove station by groupElement
               this.map.removeStationByGroupElement(selectedElement);
               break;
           }
           if (isMetroline(selectedElement)) {
               // Save state before changes
-              this.stateManager.saveState(this.map);
+              if (this.stateManager) {
+                this.stateManager.saveState(this.map);
+              }
               this.map.removeLineSegment(selectedElement);
+              break;
+          }
+          if (isImage(selectedElement)) {
+              // Save state before changes
+              if (this.stateManager) {
+                this.stateManager.saveState(this.map);
+              }
+              // Remove image element
+              selectedElement.remove();
+              break;
           }
           break;
 
@@ -564,7 +738,9 @@ export default class MetroMapDesigner {
         case "textEditTool":
 
           // Save current state before changes
-          this.stateManager.saveState(this.map);
+          if (this.stateManager) {
+            this.stateManager.saveState(this.map);
+          }
 
           if (isStationGroup(selectedElement)) {
             // Find and select station
@@ -574,6 +750,28 @@ export default class MetroMapDesigner {
                this.map.prepareStationMove(this.mousePosition);
                this.draggingStation = true;
             }
+            break;
+          }
+
+          if (this.selectedTool === "moveTool" && isImage(selectedElement)) {
+            // Start moving the image
+            this.movingImage = selectedElement;
+            this.initialMousePosition = { ...this.mousePosition };
+            
+            // Get current transform values
+            const transform = selectedElement.getAttribute('transform') || '';
+            const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+            const scaleMatch = transform.match(/scale\(([^)]+)\)/);
+            
+            this.imageTransform = {
+              translateX: translateMatch ? parseFloat(translateMatch[1]) : 0,
+              translateY: translateMatch ? parseFloat(translateMatch[2]) : 0,
+              scale: scaleMatch ? parseFloat(scaleMatch[1]) : 1
+            };
+            
+            // Create resize handles for the selected image (removes old ones automatically)
+            this.createResizeHandles(selectedElement);
+            
             break;
           }
 
@@ -637,7 +835,7 @@ export default class MetroMapDesigner {
                   this.stateManager.saveState(this.map);
           
                   // Enable inline text editing
-                  this.enableInlineTextEditing(selectedElement, this.container);
+                  this.enableInlineTextEditing(selectedElement);
               }
               break;
             case "stationTool":
@@ -662,6 +860,10 @@ export default class MetroMapDesigner {
      */
     mouseMoveCanvas = (e) => {
       // Update mouse position
+      if (!this.map) {
+        return; // Silently return if no map available during movement
+      }
+      
       this.mousePosition = helpers.getMousePos(e, this.map);
 
       // What to do?
@@ -669,6 +871,275 @@ export default class MetroMapDesigner {
       if (this.draggingStation) this.map.moveStation(this.mousePosition);
       if (this.draggingMetroline) this.map.moveMetroline(this.mousePosition);
       if (this.drawingLine) this.map.drawMetroline(this.mousePosition);
+      if (this.scalingImage && this.currentResizeHandle) this.resizeImageWithHandle(this.mousePosition);
+      if (this.movingImage) this.moveImage(this.mousePosition);
+    }
+
+    /**
+     * Scales an image based on mouse movement from the center point.
+     * Calculates scale factor based on vertical mouse movement and updates the image transform.
+     * 
+     * @param {Object} mousePosition - Current mouse position {x, y}
+     */
+    scaleImage(mousePosition) {
+      if (!this.scalingImage || !this.initialMousePosition || !this.imageTransform || !this.imageCenter) {
+        return;
+      }
+
+      // Calculate distance moved (use Y movement for scaling, like in Illustrator)
+      const deltaY = mousePosition.y - this.initialMousePosition.y;
+      
+      // Scale factor based on movement (make it sensitive but not too fast)
+      const scaleFactor = 1 + (deltaY / 200); // 200px movement = 2x scale
+      
+      // Ensure minimum scale of 0.1 and maximum of 5
+      const newScale = Math.max(0.1, Math.min(5, this.imageTransform.scale * scaleFactor));
+      
+      // Get image original dimensions
+      const bbox = this.scalingImage.getBBox();
+      const originalWidth = bbox.width;
+      const originalHeight = bbox.height;
+      
+      // Calculate new position to keep image centered on the same point
+      const scaleDiff = newScale - this.imageTransform.scale;
+      const offsetX = -(originalWidth * scaleDiff) / 2;
+      const offsetY = -(originalHeight * scaleDiff) / 2;
+      
+      const newTranslateX = this.imageTransform.translateX + offsetX;
+      const newTranslateY = this.imageTransform.translateY + offsetY;
+      
+      // Update transform attribute
+      let transform = `translate(${newTranslateX}, ${newTranslateY})`;
+      if (newScale !== 1) {
+        transform += ` scale(${newScale})`;
+      }
+      
+      this.scalingImage.setAttribute('transform', transform);
+    }
+
+    /**
+     * Creates resize handles for an image element
+     * @param {SVGImageElement} imageElement - The image element to create handles for
+     */
+    createResizeHandles(imageElement) {
+      this.removeResizeHandles();
+      
+      if (!this.map?.svgMap) return;
+      
+      this.currentSelectedImage = imageElement;
+      const bbox = this.getImageBounds(imageElement);
+      
+      // Create container group for handles
+      this.resizeHandles = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      this.resizeHandles.setAttribute("class", "resize-handles");
+      
+      const handleSize = 8;
+      const offset = handleSize / 2;
+      
+      // Handle configurations: [position, cursor, x, y]
+      const handleConfigs = [
+        ["nw", "nw-resize", bbox.x - offset, bbox.y - offset],
+        ["ne", "ne-resize", bbox.x + bbox.width - offset, bbox.y - offset],
+        ["se", "se-resize", bbox.x + bbox.width - offset, bbox.y + bbox.height - offset],
+        ["sw", "sw-resize", bbox.x - offset, bbox.y + bbox.height - offset]
+      ];
+      
+      handleConfigs.forEach(([position, cursor, x, y]) => {
+        const handle = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        Object.assign(handle, {
+          setAttribute: handle.setAttribute.bind(handle)
+        });
+        
+        const attributes = {
+          x, y, 
+          width: handleSize,
+          height: handleSize,
+          fill: "#4a9eff",
+          stroke: "#ffffff",
+          "stroke-width": "1",
+          cursor,
+          "data-resize-position": position,
+          class: "resize-handle"
+        };
+        
+        Object.entries(attributes).forEach(([key, value]) => 
+          handle.setAttribute(key, value)
+        );
+        
+        this.resizeHandles.appendChild(handle);
+      });
+      
+      this.map.svgMap.appendChild(this.resizeHandles);
+    }
+    
+    /**
+     * Removes existing resize handles
+     */
+    removeResizeHandles() {
+      if (this.resizeHandles) {
+        this.resizeHandles.remove();
+        this.resizeHandles = null;
+      }
+      this.currentSelectedImage = null;
+    }
+    
+    /**
+     * Gets the actual bounds of an image including transforms
+     * @param {SVGImageElement} imageElement - The image element
+     * @returns {Object} Bounding box with x, y, width, height
+     */
+    getImageBounds(imageElement) {
+      const transform = imageElement.getAttribute('transform') || '';
+      const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+      const scaleMatch = transform.match(/scale\(([^)]+)\)/);
+      
+      const translateX = translateMatch ? parseFloat(translateMatch[1]) : 0;
+      const translateY = translateMatch ? parseFloat(translateMatch[2]) : 0;
+      const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+      
+      const bbox = imageElement.getBBox();
+      
+      return {
+        x: translateX,
+        y: translateY,
+        width: bbox.width * scale,
+        height: bbox.height * scale
+      };
+    }
+    
+    /**
+     * Checks if a click target is a resize handle
+     * @param {SVGElement} target - The clicked element
+     * @returns {string|null} The resize position or null
+     */
+    getResizeHandlePosition(target) {
+      if (target && target.classList && target.classList.contains('resize-handle')) {
+        return target.getAttribute('data-resize-position');
+      }
+      return null;
+    }
+    
+    /**
+     * Resizes an image based on handle position and mouse movement
+     * @param {Object} mousePosition - Current mouse position
+     */
+    resizeImageWithHandle(mousePosition) {
+      if (!this.scalingImage || !this.currentResizeHandle || !this.initialMousePosition || !this.imageTransform) {
+        return;
+      }
+      
+      const delta = {
+        x: mousePosition.x - this.initialMousePosition.x,
+        y: mousePosition.y - this.initialMousePosition.y
+      };
+      
+      const bbox = this.scalingImage.getBBox();
+      const currentSize = {
+        width: bbox.width * this.imageTransform.scale,
+        height: bbox.height * this.imageTransform.scale
+      };
+      
+      // Handle configuration: [xMultiplier, yMultiplier, anchorX, anchorY]
+      const handleConfig = {
+        se: [1, 1, 0, 0],         // grow right+down, anchor top-left
+        sw: [-1, 1, 1, 0],        // grow left+down, anchor top-right  
+        ne: [1, -1, 0, 1],        // grow right+up, anchor bottom-left
+        nw: [-1, -1, 1, 1]        // grow left+up, anchor bottom-right
+      };
+      
+      const [xMult, yMult, anchorXRatio, anchorYRatio] = handleConfig[this.currentResizeHandle] || [1, 1, 0, 0];
+      
+      // Calculate scale factors for both dimensions
+      const scaleX = (currentSize.width + delta.x * xMult) / currentSize.width;
+      const scaleY = (currentSize.height + delta.y * yMult) / currentSize.height;
+      
+      // Use minimum scale to maintain aspect ratio
+      const scaleFactor = Math.min(scaleX, scaleY);
+      const newScale = Math.max(0.1, Math.min(5, this.imageTransform.scale * scaleFactor));
+      
+      // Calculate anchor point and new position
+      const newSize = {
+        width: bbox.width * newScale,
+        height: bbox.height * newScale
+      };
+      
+      const anchor = {
+        x: this.imageTransform.translateX + currentSize.width * anchorXRatio,
+        y: this.imageTransform.translateY + currentSize.height * anchorYRatio
+      };
+      
+      const newTranslate = {
+        x: anchor.x - newSize.width * anchorXRatio,
+        y: anchor.y - newSize.height * anchorYRatio
+      };
+      
+      // Apply transform
+      const transform = `translate(${newTranslate.x}, ${newTranslate.y})${newScale !== 1 ? ` scale(${newScale})` : ''}`;
+      this.scalingImage.setAttribute('transform', transform);
+      
+      this.updateResizeHandles();
+    }
+    
+    /**
+     * Updates resize handle positions for the current image
+     */
+    updateResizeHandles() {
+      const targetImage = this.scalingImage || this.movingImage || this.currentSelectedImage;
+      if (!this.resizeHandles || !targetImage) return;
+      
+      const bbox = this.getImageBounds(targetImage);
+      const offset = 4; // handleSize / 2
+      
+      // Position mappings for handles in order: nw, ne, se, sw
+      const positions = [
+        [bbox.x - offset, bbox.y - offset],
+        [bbox.x + bbox.width - offset, bbox.y - offset],
+        [bbox.x + bbox.width - offset, bbox.y + bbox.height - offset],
+        [bbox.x - offset, bbox.y + bbox.height - offset]
+      ];
+      
+      this.resizeHandles.querySelectorAll('.resize-handle').forEach((handle, i) => {
+        if (positions[i]) {
+          handle.setAttribute('x', positions[i][0]);
+          handle.setAttribute('y', positions[i][1]);
+        }
+      });
+    }
+    
+    /**
+     * Finds the currently selected image (the one with resize handles)
+     * @returns {SVGImageElement|null} The currently selected image or null
+     */
+    findCurrentSelectedImage() {
+      // Find image that currently has resize handles
+      // We can track this by storing it when we create handles
+      return this.currentSelectedImage || null;
+    }
+
+    /**
+     * Moves an image based on mouse movement
+     * @param {Object} mousePosition - Current mouse position
+     */
+    moveImage(mousePosition) {
+      if (!this.movingImage || !this.initialMousePosition || !this.imageTransform) {
+        return;
+      }
+      
+      const deltaX = mousePosition.x - this.initialMousePosition.x;
+      const deltaY = mousePosition.y - this.initialMousePosition.y;
+      
+      const newTranslateX = this.imageTransform.translateX + deltaX;
+      const newTranslateY = this.imageTransform.translateY + deltaY;
+      
+      let transform = `translate(${newTranslateX}, ${newTranslateY})`;
+      if (this.imageTransform.scale !== 1) {
+        transform += ` scale(${this.imageTransform.scale})`;
+      }
+      
+      this.movingImage.setAttribute('transform', transform);
+      
+      // Update resize handles position
+      this.updateResizeHandles();
     }
 
     /**
@@ -681,24 +1152,39 @@ export default class MetroMapDesigner {
      */
     mouseUpCanvas = (e) => {
       // Update mouse position
-      this.mousePosition = helpers.getMousePos(e, this.map);
-      if (this.draggingElement) {
+      if (this.map) {
+        this.mousePosition = helpers.getMousePos(e, this.map);
+      }
+      
+      if (this.draggingElement && this.map) {
         this.map.endMoveCanvasElement();
         this.draggingElement = false;
       }
-      if (this.draggingMetroline) {
+      if (this.draggingMetroline && this.map) {
         this.map.endMoveMetroline(this.mousePosition);
         this.draggingMetroline = false;
       }
-      if (this.draggingStation) {
+      if (this.draggingStation && this.map) {
         this.map.endMoveStation(this.mousePosition);
         this.draggingStation = false;
       }
-      if (this.drawingLine) {
-
+      if (this.scalingImage) {
+        // End image scaling
+        this.scalingImage = null;
+        this.currentResizeHandle = null;
+        this.initialMousePosition = null;
+        this.imageTransform = null;
+        this.imageCenter = null;
+      }
+      if (this.movingImage) {
+        // End image moving
+        this.movingImage = null;
+        this.initialMousePosition = null;
+        this.imageTransform = null;
+      }
+      if (this.drawingLine && this.map) {
         this.map.endDrawMetroline(this.mousePosition);
         this.drawingLine = false;
-
       }
     }
 
@@ -718,8 +1204,15 @@ export default class MetroMapDesigner {
           throw new Error("Invalid mousePosition: must contain valid x and y properties.");
         }
 
+        if (!this.map) {
+          console.warn('addStationHandler: No map available');
+          return;
+        }
+
         // Save state
-        this.stateManager.saveState(this.map);
+        if (this.stateManager) {
+          this.stateManager.saveState(this.map);
+        }
         
         // Create station config
         const stationConfig = {
@@ -729,7 +1222,7 @@ export default class MetroMapDesigner {
         }
 
         // Pass to map try to add station
-        const station = this.map.addNewStation(stationConfig);
+        this.map.addNewStation(stationConfig);
 
     }
 
@@ -747,12 +1240,19 @@ export default class MetroMapDesigner {
         throw new Error('changeStationProperty called without a property specification');
       }
 
+      if (!this.map) {
+        console.warn('changeSelectedStationProperty: No map available');
+        return false;
+      }
+
       const station = this.map.getSelectedStation();
       if(!station) {
         throw new Error('changeStationProperty called without a station selected');
       }
 
-      this.stateManager.saveState(this.map);
+      if (this.stateManager) {
+        this.stateManager.saveState(this.map);
+      }
 
       // What are we changing?
       switch(property) {
@@ -798,11 +1298,13 @@ export default class MetroMapDesigner {
      * @function loadMap
      * @description
      * Loads the provided SVG content into the map container. If no content is provided, the default map is loaded.
+     * Content from untrusted sources is automatically sanitized to prevent XSS attacks.
      *
      * @param {string} [svgcontent=null] - The SVG content to load.
+     * @param {boolean} [trusted=false] - Whether the content is from a trusted source (skips sanitization).
      * @throws {Error} Throws an error if the provided content is not valid SVG.
      */
-    loadMap(svgcontent = null) {
+    loadMap(svgcontent = null, trusted = false) {
         if(!svgcontent) svgcontent = this.defaultMap;
 
         // Check if content is SVG
@@ -811,10 +1313,38 @@ export default class MetroMapDesigner {
         return;
         }
     
+        // Clean up existing event listeners before replacing content
+        this.removeMapEventListeners();
+        
+        // Sanitize untrusted content to prevent XSS attacks
+        let finalSvgContent = svgcontent;
+        if (!trusted) {
+            try {
+                finalSvgContent = helpers.sanitizeMapContent(svgcontent);
+            } catch (error) {
+                console.error('Failed to sanitize SVG content:', error);
+                alert('Invalid or unsafe SVG content. Cannot load map.');
+                return;
+            }
+        }
+        
         // Load svgcontent in SVG container
-        this.container.innerHTML = svgcontent;
+        this.container.innerHTML = finalSvgContent;
+        
+        // Migrate old logo layer to new imageLayer if present
+        this.migrateLogoLayerToImages();
+        
+        // Clean up any cursor styles from the loaded SVG that might interfere
+        this.cleanSvgCursorStyles();
+        
         this.map = new metromap(this, this.container.querySelector("svg"));
         this.setMapEventListeners();
+
+        // Restore cursor for current tool (loadMap replaces container content, losing cursor style)
+        if (this.selectedTool) {
+            const { cursor = "pen" } = config.applicationConfig.toolSettings[this.selectedTool] || {};
+            this.setCursor(cursor);
+        }
 
         // If there is no defaultmap set this as default map
         if(!this.defaultMap) this.defaultMap = svgcontent;
@@ -846,17 +1376,80 @@ export default class MetroMapDesigner {
     /**
      * @function loadMapFromUrl
      * @description
-     * Fetches and loads an SVG map from the specified URL.
+     * Fetches and loads an SVG map from the specified URL with proper error handling and recovery.
      *
      * @param {string} url - The URL to fetch the SVG content from.
-     * @throws {Error} Throws an error if the SVG content cannot be retrieved.
+     * @param {boolean} [isDefault=false] - Whether this is loading the default map (enables fallback).
+     * @throws {Error} Throws an error if the SVG content cannot be retrieved and no fallback is available.
      */
-    async loadMapFromUrl(url) {
+    async loadMapFromUrl(url, isDefault = false) {
+      // Prevent concurrent map loading operations
+      const operationId = `loadMapFromUrl_${url}_${Date.now()}`;
+      
+      if (this.isLoadingMap) {
+        console.warn(`Map loading in progress, skipping concurrent request for: ${url}`);
+        throw new Error('Map loading already in progress. Please wait for current operation to complete.');
+      }
+      
+      this.isLoadingMap = true;
+      this.loadingOperations.add(operationId);
+      
       try {
+        // Emit loading state to UI
+        this.runHooks('loadingStateChanged', { loading: true, operation: 'loadMap', url });
+        
         const svgContent = await this.importExport.getCanvasFromUrl(url);
-        this.loadMap(svgContent);
+        this.loadMap(svgContent, true); // URL content is already sanitized
+        
+        // Emit success state
+        this.runHooks('loadingStateChanged', { loading: false, operation: 'loadMap', success: true, url });
       } catch (error) {
-        throw new Error("Error fetching the metro map from the given URL: " + error);
+        // For default map loading, try fallback recovery
+        if (isDefault && url !== 'sources/defaultCanvas.svg') {
+          console.warn(`Failed to load default map from ${url}, trying fallback:`, error.message);
+          try {
+            await this.loadMapFromUrl('sources/defaultCanvas.svg', true);
+            return; // Success with fallback
+          } catch (fallbackError) {
+            console.error('Fallback default map also failed:', fallbackError.message);
+          }
+        }
+        
+        // Create user-friendly error message based on error type
+        let userMessage;
+        switch (error.name) {
+          case 'NetworkError':
+            if (error.status === 404) {
+              userMessage = `Map file not found. Please check the file path: ${url}`;
+            } else if (error.status === 403) {
+              userMessage = `Access denied to map file. Check permissions for: ${url}`;
+            } else if (error.status >= 500) {
+              userMessage = `Server error loading map. Please try again later.`;
+            } else {
+              userMessage = `Network error: ${error.message}`;
+            }
+            break;
+          case 'SanitizationError':
+            userMessage = `Invalid map file format. The file contains unsafe or malformed content.`;
+            break;
+          default:
+            userMessage = `Unable to load map: ${error.message}`;
+        }
+        
+        // Emit error state
+        this.runHooks('loadingStateChanged', { loading: false, operation: 'loadMap', success: false, error: userMessage, url });
+        
+        // Create new error with user-friendly message but preserve original error
+        const userError = new Error(userMessage);
+        userError.name = 'MapLoadError';
+        userError.cause = error;
+        userError.url = url;
+        
+        throw userError;
+      } finally {
+        // Always cleanup loading state
+        this.isLoadingMap = false;
+        this.loadingOperations.delete(operationId);
       }
     }
 
@@ -900,7 +1493,7 @@ export default class MetroMapDesigner {
     getShareLink() {
       let code = this.importExport.getShareLink(this.map);
       if(code) return code;
-      else throw new Error("Fout bij opslaan van de metrokaart", "danger");
+      else throw new Error("Error saving the metro map");
     }
 
     /**

@@ -1,5 +1,187 @@
 @import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap");
 
+body, html {
+    background-color: #efefef;
+}
+
+/* mmap-style Navigation - Split containers */
+#fullNavigation {
+  pointer-events: none; /* Allow clicks through transparent background */
+  z-index: 1030;
+}
+
+#fullNavigation > div {
+  pointer-events: auto; /* Re-enable clicks on nav containers */
+}
+
+/* Left navigation container */
+.mmap-nav-left {
+  top: 8px;
+  left: 16px;
+  z-index: 1031;
+}
+
+/* Right navigation container */
+.mmap-nav-right {
+  top: 8px;
+  right: 16px;
+  z-index: 1031;
+}
+
+/* Navigation containers styling */
+.mmap-nav-left > div,
+.mmap-nav-right > div {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.navbar-brand {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-right: 0;
+}
+
+/* Menu button styling */
+.mmap-menu-btn {
+  border: none !important;
+  background: none !important;
+  color: #6c757d;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.mmap-menu-btn:hover {
+  background-color: #f8f9fa !important;
+  color: #495057;
+}
+
+/* Project status in center */
+.mmap-project-status {
+  background-color: #f8f9fa !important;
+  border: 1px solid #e9ecef;
+  font-size: 0.85rem;
+  max-width: 300px;
+}
+
+/* Icon buttons */
+.mmap-icon-btn {
+  border: none !important;
+  background: none !important;
+  color: #6c757d;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  max-height: 29px;
+}
+
+.mmap-icon-btn:hover {
+  background-color: #f8f9fa !important;
+  color: #495057;
+}
+
+/* Language selector */
+.mmap-select {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  width: auto;
+  min-width: 60px;
+  max-height: 29px;
+}
+
+.mmap-select:focus {
+  border-color: #4285f4;
+  box-shadow: 0 0 0 0.2rem rgba(66, 133, 244, 0.15);
+}
+
+/* Present button (Opslaan) */
+.btn-present {
+  border-radius: 8px !important;
+  font-weight: 500;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  color: #374151;
+  transition: all 0.2s ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  max-height: 29px;
+}
+
+.btn-present:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  color: #111827;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Share button (Delen) */
+.btn-share {
+  border-radius: 8px !important;
+  font-weight: 500;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
+  transition: all 0.2s ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  max-height: 29px;
+}
+
+.btn-share:hover {
+  background-color: #4338ca;
+  border-color: #4338ca;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .mmap
+-nav-left {
+    left: 8px;
+    top: 8px;
+  }
+  
+  .mmap
+-nav-right {
+    right: 8px;
+    top: 8px;
+  }
+  
+  .mmap
+-nav-left span.text-muted {
+    display: none;
+  }
+  
+  .mmap
+-nav-right .navbar-text {
+    display: none;
+  }
+  
+  /* Stack navigation on very small screens */
+  @media (max-width: 576px) {
+    .mmap
+  -nav-right {
+      top: 70px; /* Below left nav */
+    }
+  }
+}
+
+#application {
+    background-color: #efefef;
+}
+
 #canvas {
   border: 0px;
   background-color: #ffffff;
@@ -11,7 +193,7 @@
   box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.3);
   margin-right: 220px;
   margin-bottom: 220px;
-  margin-top: 65px;
+  margin-top: 70px;
 }
 
 #canvas a {
@@ -21,61 +203,216 @@
 .toolbar {
   position: fixed;
   overflow-y: auto;
-  top: 15%;
-  right: 10px;
+  bottom: 16px;
+  right: 16px;
   z-index: 101;
-  width: 180px;
-  box-shadow: -3px 6px 8px rgba(0, 0, 0, 0.3);
+  width: 144px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  padding: 12px;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 .toolbar-handle {
   position: relative;
-  width: 76%;
-  height: 4px;
-  margin-top: 0.5rem;
-  margin-left: 12%;
-  background-color: #ccc;
+  width: 32px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
   cursor: move;
+  user-select: none;
+  margin: 0 auto 8px auto;
+  transition: background-color 0.2s ease;
+}
+
+.toolbar-handle:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.toolbar-handle::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 1px;
+  box-shadow: 
+    0 -3px 0 rgba(0, 0, 0, 0.4),
+    0 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Toolbar sections with 3-column grid */
+.toolbarTool {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+/* Individual toolbar buttons styling */
+.toolbar .btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin: 0;
+  padding: 0;
+}
+
+.toolbar .btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #374151;
+  transform: scale(1.05);
+}
+
+.toolbar .btn.active,
+.toolbar .btn.selected,
+.toolbar .selectAble.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.toolbar .btn.active:hover,
+.toolbar .btn.selected:hover,
+.toolbar .selectAble.active:hover {
+  background: #2563eb;
+  transform: scale(1.05);
+}
+
+/* Separators between tool groups */
+.toolbar-separator {
+  width: 100%;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 6px 0;
+}
+
+/* Bottom toolbar for grid and zoom controls */
+.bottom-toolbar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 101;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bottom-toolbar .btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin: 0;
+  padding: 0;
+}
+
+.bottom-toolbar .btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #374151;
+  transform: scale(1.05);
+}
+
+.bottom-toolbar .btn.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.bottom-toolbar .zoom-display {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: center;
+  transition: all 0.2s ease;
   user-select: none;
 }
 
-.toolbarTool {
-  padding: 10px;
-  margin: 8px;
+.bottom-toolbar .zoom-display:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.05);
+}
+
+/* Special styling for spans (titles) */
+.toolbarTool span {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
   text-align: center;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.3rem 0.3rem;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
+/* Color picker styling */
 .toolbarTool input[type="color"] {
-  width: 100%;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  background-color: transparent;
-  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  height: 40px;
+  padding: 0;
+  background: transparent;
 }
 
-.toolbarTool span,
-.toolbarTool div,
-.toolbarTool select,
-.toolbarTool textarea,
-.toolbarTool input[type="text"] {
-  grid-column: span 3;
-  max-width: 100%;
+/* Metroline buttons container */
+.toolbarTool #metroline-buttons {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 4px;
 }
 
-.toolbarTool select {
-  background-color: black;
-  color: white;
-  height: 30px;
+.toolbarTool #metroline-buttons .metro-button {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  flex-grow: 1;
+  min-width: 24px;
 }
 
+/* Legacy styles - keeping for compatibility */
 .tt3 {
   grid-column: 1 / span 3;
   max-width: 100%;
@@ -89,21 +426,52 @@
   grid-column: 1 / span 2;
 }
 
-.toolbarTool #metroline-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-
-.toolbarTool #metroline-buttons .metro-button {
-  width: 35px;
-  height: 25px;
-  border: 2px solid #000;
-  flex-grow: 1;
+.toolbarTool select {
+  background-color: black;
+  color: white;
+  height: 30px;
 }
 
 .toolbarTool #addColorButton {
   height: 30px;
+}
+
+/* Station Editor - Light layout matching toolbars */
+#stationEditor {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
+  margin: 0 16px 0 16px;
+}
+
+#stationEditor .input-group-text {
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  color: #6c757d;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+#stationEditor .form-control,
+#stationEditor .form-select {
+  border-color: #e9ecef;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+#stationEditor .form-control:focus,
+#stationEditor .form-select:focus {
+  border-color: #4285f4;
+  box-shadow: 0 0 0 0.2rem rgba(66, 133, 244, 0.15);
+}
+
+#stationEditor .form-select:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  opacity: 0.65;
 }
 
 .stationEditorHidden {
@@ -111,6 +479,7 @@
   opacity: 0;
   transition: opacity 0.4s ease-in-out;
 }
+
 .stationEditorShow {
   visibility: visible;
   opacity: 1;
@@ -132,19 +501,64 @@
 }
 
 @media only screen and (max-device-width: 1030px) {
-  .toolbar-handle {
-    height: 6px;
+  .toolbar {
+    width: 132px;
+    right: 8px;
+    padding: 8px;
   }
-
+  
+  .toolbar .btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .toolbarTool input[type="color"] {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .toolbarTool span {
+    font-size: 10px;
+  }
+  
+  .toolbar-handle {
+    width: 28px;
+    height: 5px;
+    margin-bottom: 6px;
+  }
+  
+  .toolbar-handle::before {
+    width: 16px;
+  }
+  
+  .bottom-toolbar {
+    bottom: 8px;
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  
+  .bottom-toolbar .btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .bottom-toolbar .zoom-display {
+    font-size: 12px;
+    min-width: 45px;
+    padding: 3px 8px;
+  }
+  
   #lineToolbar {
-    top: 10px;
+    bottom: 320px;
   }
 
   #stationToolbar {
-    top: 290px;
+    bottom: 180px;
   }
 
   #mapToolbar {
-    top: 560px;
+    bottom: 80px;
   }
 }

@@ -1,4 +1,5 @@
 import * as config from '../config.js';
+import { sanitizeMapContent } from '../common.js';
 
 /**
  * Class for handling the import and export functionalities of a metromap design.
@@ -62,7 +63,7 @@ export default class MetromapImportExport {
         return jsonData;
       } else {
         const svgContent = await response.text();
-        return this.sanitizeMapContent(svgContent);
+        return sanitizeMapContent(svgContent);
       }
     } catch (error) {
       console.error(error);
@@ -85,14 +86,67 @@ export default class MetromapImportExport {
     try {
       let response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Error fetching canvas from URL: ${response.statusText}`);
+        // Create specific error based on status code
+        const errorMessage = this.getErrorMessageForStatus(response.status, response.statusText, url);
+        const error = new Error(errorMessage);
+        error.name = 'NetworkError';
+        error.status = response.status;
+        error.url = url;
+        throw error;
       }
 
       let svgContent = await response.text();
-      return this.sanitizeMapContent(svgContent);
+      try {
+        return sanitizeMapContent(svgContent);
+      } catch (sanitizeError) {
+        const error = new Error(`Invalid SVG content from URL: ${url}. ${sanitizeError.message}`);
+        error.name = 'SanitizationError';
+        error.url = url;
+        error.cause = sanitizeError;
+        throw error;
+      }
     } catch (error) {
-      console.error(error);
-      throw new Error("Error fetching canvas from URL");
+      // Re-throw with additional context if it's a network/fetch error
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        const networkError = new Error(`Network error loading map from: ${url}. Check internet connection or file path.`);
+        networkError.name = 'NetworkError';
+        networkError.url = url;
+        networkError.cause = error;
+        throw networkError;
+      }
+      
+      // Re-throw our custom errors as-is
+      if (error.name === 'NetworkError' || error.name === 'SanitizationError') {
+        throw error;
+      }
+      
+      // Unknown error - wrap with context
+      const unknownError = new Error(`Unexpected error loading map from: ${url}. ${error.message}`);
+      unknownError.name = 'UnknownError';
+      unknownError.url = url;
+      unknownError.cause = error;
+      throw unknownError;
+    }
+  }
+
+  /**
+   * Gets a user-friendly error message based on HTTP status code.
+   * @private
+   */
+  getErrorMessageForStatus(status, statusText, url) {
+    switch (status) {
+      case 404:
+        return `Map file not found: ${url}. Please check the file path.`;
+      case 403:
+        return `Access denied to map file: ${url}. Check file permissions.`;
+      case 500:
+      case 502:
+      case 503:
+        return `Server error loading map from: ${url}. Try again later.`;
+      case 0:
+        return `Network error: Cannot reach ${url}. Check internet connection.`;
+      default:
+        return `HTTP ${status} error loading map from: ${url}. ${statusText}`;
     }
   }
 
@@ -104,7 +158,7 @@ export default class MetromapImportExport {
    */
   getSVG(map) {
     let metrokaartContent = map.getCanvasContent(true);
-    return this.sanitizeMapContent(metrokaartContent);
+    return sanitizeMapContent(metrokaartContent);
   }
 
   /**
@@ -115,68 +169,136 @@ export default class MetromapImportExport {
    */
   getPng(map) {
     return new Promise((resolve, reject) => {
-      const svgData = this.getSVG(map);
-      const img = new Image();
-      const svg = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(svg);
+      let svg = null;
+      let url = null;
+      let canvas = null;
+      let img = null;
+      
+      try {
+        const svgData = this.getSVG(map);
+        if (!svgData) {
+          throw new Error("No SVG data available for PNG conversion");
+        }
+        
+        img = new Image();
+        svg = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+        url = URL.createObjectURL(svg);
 
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        context.imageSmoothingQuality = "high";
-        context.textRendering = "geometricPrecision";
+        // Set up cleanup timeout as fallback
+        const cleanupTimeout = setTimeout(() => {
+          if (url) {
+            URL.revokeObjectURL(url);
+          }
+          reject(new Error("PNG conversion timeout"));
+        }, 30000); // 30 second timeout
 
-        canvas.width = img.width * 2;
-        canvas.height = img.height * 2;
+        img.onload = () => {
+          try {
+            clearTimeout(cleanupTimeout);
+            canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            
+            if (!context) {
+              throw new Error("Could not get canvas 2D context");
+            }
+            
+            context.imageSmoothingQuality = "high";
+            context.textRendering = "geometricPrecision";
 
-        context.fillStyle = "white";
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.width = img.width * 2;
+            canvas.height = img.height * 2;
 
-        const pngDataUrl = canvas.toDataURL("image/png");
-        URL.revokeObjectURL(url);
-        resolve(pngDataUrl);
-      };
+            context.fillStyle = "white";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      img.onerror = (error) => {
-        URL.revokeObjectURL(url);
+            const pngDataUrl = canvas.toDataURL("image/png");
+            
+            // Clean up resources
+            URL.revokeObjectURL(url);
+            canvas = null;
+            img = null;
+            
+            resolve(pngDataUrl);
+          } catch (error) {
+            URL.revokeObjectURL(url);
+            reject(error);
+          }
+        };
+
+        img.onerror = (error) => {
+          clearTimeout(cleanupTimeout);
+          URL.revokeObjectURL(url);
+          reject(new Error("Failed to load SVG image for PNG conversion: " + error));
+        };
+
+        img.src = url;
+      } catch (error) {
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
         reject(error);
-      };
-
-      img.src = url;
+      }
     });
   }
 
   /**
-   * Downloads the metro map as a JSON file.
+   * Downloads the metro map as a JSON file with proper resource cleanup.
    *
    * @param {Object} map - The metromap object.
    * @param {string} [filename="metromap.json"] - The desired filename for the downloaded JSON file.
    */
   getJSON(map, filename = "metromap") {
+    let blob = null;
+    let url = null;
+    let link = null;
+    
     try {
       // Generate the JSON data from the map
       const jsonData = map.toJSON();
+      if (!jsonData) {
+        throw new Error("No JSON data available from map");
+      }
 
       // Convert JSON object to a string
       const jsonString = JSON.stringify(jsonData, null, 2); // Pretty-print with 2 spaces
+      if (!jsonString || jsonString === '{}') {
+        throw new Error("Generated JSON data is empty");
+      }
 
       // Create a Blob with JSON content
-      const blob = new Blob([jsonString], { type: "application/json" });
+      blob = new Blob([jsonString], { type: "application/json" });
+      url = URL.createObjectURL(blob);
 
       // Create a download link
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
+      link = document.createElement("a");
+      link.href = url;
       link.download = filename + ".json";
+      link.style.display = 'none'; // Hide the link
+      document.body.appendChild(link);
 
       // Programmatically click the link to trigger the download
       link.click();
 
-      // Clean up by revoking the object URL
-      URL.revokeObjectURL(link.href);
+      // Clean up with proper timing to ensure download starts
+      setTimeout(() => {
+        if (link && link.parentNode) {
+          document.body.removeChild(link);
+        }
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+      }, 100);
     } catch (error) {
+      // Clean up resources on error
+      if (link && link.parentNode) {
+        document.body.removeChild(link);
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
       console.error("Error downloading the JSON file:", error);
-      throw new Error("Could not generate the JSON file for download.");
+      throw new Error("Could not generate the JSON file for download: " + error.message);
     }
   }
 
@@ -338,17 +460,5 @@ export default class MetromapImportExport {
     return true;
   }
 
-  /**
-   * Sanitizes SVG content to allow only specific tags and attributes.
-   * 
-   * @param {string} content - The raw SVG content.
-   * @returns {string} - The sanitized SVG content.
-   */
-  sanitizeMapContent(content) {
-    return DOMPurify.sanitize(content, {
-      ALLOWED_TAGS: config.applicationConfig.METROMAP_DESIGNER_MAP_TAGS,
-      ALLOWED_ATTR: config.applicationConfig.METROMAP_DESIGNER_MAP_ATTRIBUTES
-    });
-  }
 
 }
