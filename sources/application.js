@@ -216,8 +216,8 @@ export async function loadInterface() {
  */
 function loadSharedMapFromUrl() {
   const urlParams = new URLSearchParams(window.location.search);
-  const svgCode = urlParams.get("mc");
-  const jsonCode = urlParams.get("json");
+  const svgCode = urlParams.get(config.applicationConfig.shareCodeParameter);
+  const jsonCode = urlParams.get(config.applicationConfig.jsconCodeParameter);
 
   // Helper function to handle map loading with error handling
   const loadMapCode = (code, loadFunction, mapType) => {
@@ -231,8 +231,13 @@ function loadSharedMapFromUrl() {
     }
   };
 
-  loadMapCode(svgCode, metromapdesignapplication.loadMapWithSvgCode.bind(metromapdesignapplication), "SVG");
-  loadMapCode(jsonCode, metromapdesignapplication.loadMapWithJsonCode.bind(metromapdesignapplication), "JSON");
+  // Load SVG format first, if available
+  if (svgCode) {
+    loadMapCode(svgCode, metromapdesignapplication.loadMapWithSvgCode.bind(metromapdesignapplication), "SVG");
+  } else if (jsonCode) {
+    // Only load JSON if SVG is not available
+    loadMapCode(jsonCode, metromapdesignapplication.loadMapWithJsonCode.bind(metromapdesignapplication), "JSON");
+  }
 }
 
 /**

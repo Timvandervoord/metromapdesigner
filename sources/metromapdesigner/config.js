@@ -62,6 +62,8 @@ export let applicationConfig = {
       uploadLink: "https://yourlink/uploadMetroMap",
       downloadBaseLink: "https://yourlink/?mc=",
       retrievalLink: "https://yourlink/retrieveMetroMap?code=",
+      shareCodeParameter: "mc",
+      jsconCodeParameter: "json"
 }
 
 export const gridConfig = {
