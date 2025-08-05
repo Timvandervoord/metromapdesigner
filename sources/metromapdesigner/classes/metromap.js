@@ -3,6 +3,7 @@ import * as config from '../config.js';
 import metromapLegenda from './legenda.js';
 import metromapMetroline from './metroline.js';
 import metromapStation from './station.js';
+import { SpatialGrid } from '../common.js';
 
 /**
  * @class metromap
@@ -87,6 +88,12 @@ export default class metromap {
      * @description Reference to the `metromapLegenda` instance managing the legend.
      */
     legenda;
+
+    /**
+     * @property {SpatialGrid} spatialIndex
+     * @description Spatial index for optimized metroline detection and intersection queries.
+     */
+    spatialIndex;
 
     /**
      * @property {Object|null} stationEdited
@@ -218,6 +225,11 @@ export default class metromap {
 
          // Create legenda object
          this.legenda = new metromapLegenda(this, this.legendaLayer);
+
+         // Initialize spatial index for performance optimization
+         const cellSize = config.gridConfig.size * 2; // Use 2x grid size for optimal performance
+         this.spatialIndex = new SpatialGrid(cellSize, this.getWidth(), this.getHeight());
+         this.buildSpatialIndex();
     }
 
     // HOOKS 
@@ -573,6 +585,11 @@ export default class metromap {
 
         // Redraw the grid
         this.gridDraw();
+
+        // Rebuild spatial index with new dimensions
+        if (this.spatialIndex) {
+            this.spatialIndex.rebuild(this.lines, width, height);
+        }
     }
 
     /**
@@ -1279,6 +1296,9 @@ export default class metromap {
         mapLines.forEach(line => {
            this.lines.push(new metromapMetroline(this, line));
         });
+
+        // Rebuild spatial index after updating lines
+        this.updateSpatialIndex('rebuild');
     }
 
     /**
@@ -1344,6 +1364,9 @@ export default class metromap {
         const newMetroline = new metromapMetroline(this, metrolineGroup);
         newMetroline.setMetrolineColor(color);
         this.lines.push(newMetroline);
+
+        // Update spatial index
+        this.updateSpatialIndex('add', newMetroline);
 
         return newMetroline;
     }
@@ -1540,6 +1563,9 @@ export default class metromap {
         // Run hooks before removal
         this.runHooks('removeLine', line);
 
+        // Update spatial index before removal
+        this.updateSpatialIndex('remove', line);
+
         // Remove the metroline from legenda and DOM
         this.legenda.remove(line.getId());
         const groupElement = line.getGroupElement();
@@ -1666,6 +1692,58 @@ export default class metromap {
     // SEARCH AND DETECTION FUNCTIONS
 
     /**
+     * @method buildSpatialIndex
+     * @description Builds the spatial index from all current metrolines for optimized detection.
+     */
+    buildSpatialIndex() {
+        if (this.spatialIndex) {
+            this.spatialIndex.clear();
+            this.lines.forEach(metroline => {
+                this.spatialIndex.addMetroline(metroline);
+            });
+        }
+    }
+
+    /**
+     * @method updateSpatialIndex
+     * @description Updates the spatial index when metrolines are added or removed.
+     * 
+     * @param {string} operation - The operation type: 'add', 'remove', or 'rebuild'
+     * @param {Object} metroline - The metroline object (for add/remove operations)
+     */
+    updateSpatialIndex(operation, metroline = null) {
+        if (!this.spatialIndex) return;
+
+        switch (operation) {
+            case 'add':
+                if (metroline) {
+                    this.spatialIndex.addMetroline(metroline);
+                }
+                break;
+            case 'remove':
+                if (metroline) {
+                    this.spatialIndex.removeMetroline(metroline);
+                }
+                break;
+            case 'rebuild':
+                this.buildSpatialIndex();
+                break;
+            default:
+                console.warn(`Unknown spatial index operation: ${operation}`);
+        }
+    }
+
+    /**
+     * @method getSpatialIndexStats
+     * @description Gets performance statistics for the spatial index.
+     * 
+     * @returns {Object} Performance metrics and statistics
+     */
+    getSpatialIndexStats() {
+        return this.spatialIndex ? this.spatialIndex.getStats() : null;
+    }
+
+    /**
      * @method findAndSelectStation
      * @description Finds a station based on its SVG `<g>` element and selects it. Returns the station object if found.
      * 
@@ -1737,6 +1815,7 @@ export default class metromap {
      * @returns {Set<metromapMetroline>} - A set of metrolines that overlap with the rotated rectangle.
      */
     detectMetrolinesOnBBox(rectBBox, rotation = 0, step = 10, visualFeedback = false, debug = false) {
+        const startTime = performance.now();
         const intersectingMetrolines = new Set();
 
         // Compute rectangle vertices after rotation
@@ -1753,7 +1832,7 @@ export default class metromap {
             rectCenter
         );
 
-        // Generate points along the rectangle edges
+        // Generate points along the rectangle edges for intersection testing
         const rectSamplePoints = helpers.samplePointsOnPolygonEdges(rectVertices, step);
 
         // Draw rectangle sample points if debug mode is enabled
@@ -1768,35 +1847,115 @@ export default class metromap {
             this.lines.forEach(line => line.highlight(false));
         }
 
-        // For each metroline, check for intersections
-        for (const line of this.lines) {
-            for (const polyline of line.polylines) {
-                const points = Array.from(polyline.points);
+        // Use spatial indexing for dramatically improved performance
+        if (this.spatialIndex) {
+            // Query spatial index for candidate segments (O(1) average case)
+            const candidateSegments = this.spatialIndex.query({
+                x: rectBBox.x,
+                y: rectBBox.y,
+                width: rectBBox.width,
+                height: rectBBox.height
+            });
 
-                for (let i = 0; i < points.length - 1; i++) {
-                    const start = { x: points[i].x, y: points[i].y };
-                    const end = { x: points[i + 1].x, y: points[i + 1].y };
+            if (debug) {
+                console.log(`Spatial index optimization: Testing ${candidateSegments.length} segments instead of ${this.getTotalSegmentCount()}`);
+            }
 
-                    // Generate intermediate points along the segment
-                    const sampledPoints = helpers.samplePointsOnLine(start, end, step);
+            // Test only spatially relevant segments
+            candidateSegments.forEach(({ segment, metroline }) => {
+                // Early exit if metroline already found
+                if (intersectingMetrolines.has(metroline)) return;
 
-                    // Check each metroline point against the rectangle sample points
-                    for (const point of sampledPoints) {
-                        if (
-                            helpers.pointInPolygon(point, rectVertices) || // Point inside rectangle
-                            helpers.lineIntersectsPolygon(point, end, rectVertices) // Intersection with rectangle edges
-                        ) {
-                            // Add to intersecting set and trigger visual feedback
+                // Test if segment intersects with the rotated rectangle
+                if (this.segmentIntersectsPolygon(segment, rectVertices)) {
+                    intersectingMetrolines.add(metroline);
+                    if (visualFeedback) metroline.highlight(true);
+                }
+            });
+
+        } else {
+            // Fallback to original brute force method if spatial index unavailable
+            console.warn('Spatial index not available, using brute force method');
+            
+            for (const line of this.lines) {
+                if (intersectingMetrolines.has(line)) continue; // Skip if already found
+                
+                for (const polyline of line.polylines) {
+                    const points = Array.from(polyline.points);
+
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const segment = {
+                            start: { x: points[i].x, y: points[i].y },
+                            end: { x: points[i + 1].x, y: points[i + 1].y }
+                        };
+
+                        if (this.segmentIntersectsPolygon(segment, rectVertices)) {
                             intersectingMetrolines.add(line);
-                            if(visualFeedback)  line.highlight(true); // Visual feedback: select the line
-                            break;
+                            if (visualFeedback) line.highlight(true);
+                            break; // Move to next polyline
                         }
                     }
+                    if (intersectingMetrolines.has(line)) break; // Move to next line
                 }
             }
         }
 
+        if (debug) {
+            const elapsedTime = performance.now() - startTime;
+            console.log(`detectMetrolinesOnBBox completed in ${elapsedTime.toFixed(2)}ms, found ${intersectingMetrolines.size} intersecting metrolines`);
+        }
+
         return intersectingMetrolines;
+    }
+
+    /**
+     * @method segmentIntersectsPolygon
+     * @description Tests if a line segment intersects with a polygon (rotated rectangle).
+     * 
+     * @param {Object} segment - Line segment with start and end points
+     * @param {Array<Object>} polygonVertices - Array of polygon vertices
+     * @returns {boolean} True if segment intersects polygon
+     */
+    segmentIntersectsPolygon(segment, polygonVertices) {
+        const { start, end } = segment;
+
+        // Check if either endpoint is inside the polygon
+        if (helpers.pointInPolygon(start, polygonVertices) || 
+            helpers.pointInPolygon(end, polygonVertices)) {
+            return true;
+        }
+
+        // Check if the segment intersects any edge of the polygon
+        for (let i = 0; i < polygonVertices.length; i++) {
+            const edgeStart = polygonVertices[i];
+            const edgeEnd = polygonVertices[(i + 1) % polygonVertices.length];
+
+            if (helpers.lineSegmentsIntersect(start, end, edgeStart, edgeEnd)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @method getTotalSegmentCount
+     * @description Gets the total number of line segments across all metrolines.
+     * Used for performance debugging and statistics.
+     * 
+     * @returns {number} Total segment count
+     */
+    getTotalSegmentCount() {
+        let totalSegments = 0;
+        this.lines.forEach(line => {
+            if (line.polylines) {
+                line.polylines.forEach(polyline => {
+                    const points = Array.from(polyline.points);
+                    totalSegments += Math.max(0, points.length - 1);
+                });
+            }
+        });
+        return totalSegments;
     }
 
     /**

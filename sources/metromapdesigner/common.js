@@ -979,6 +979,73 @@ export function samplePointsOnPolygonEdges(vertices, step) {
 }
 
 /**
+ * Tests if two line segments intersect.
+ * Uses the cross product method for efficient intersection detection.
+ * 
+ * @param {Object} seg1Start - Start point of first segment {x, y}
+ * @param {Object} seg1End - End point of first segment {x, y}
+ * @param {Object} seg2Start - Start point of second segment {x, y}
+ * @param {Object} seg2End - End point of second segment {x, y}
+ * @returns {boolean} True if segments intersect
+ */
+export function lineSegmentsIntersect(seg1Start, seg1End, seg2Start, seg2End) {
+    const { x: x1, y: y1 } = seg1Start;
+    const { x: x2, y: y2 } = seg1End;
+    const { x: x3, y: y3 } = seg2Start;
+    const { x: x4, y: y4 } = seg2End;
+
+    // Calculate the cross products
+    const d1 = crossProduct(x3 - x1, y3 - y1, x2 - x1, y2 - y1);
+    const d2 = crossProduct(x4 - x1, y4 - y1, x2 - x1, y2 - y1);
+    const d3 = crossProduct(x1 - x3, y1 - y3, x4 - x3, y4 - y3);
+    const d4 = crossProduct(x2 - x3, y2 - y3, x4 - x3, y4 - y3);
+
+    // Check if segments intersect
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+        return true;
+    }
+
+    // Check for collinear points (on the same line)
+    if (d1 === 0 && isPointOnSegment(seg2Start, seg1Start, seg1End)) return true;
+    if (d2 === 0 && isPointOnSegment(seg2End, seg1Start, seg1End)) return true;
+    if (d3 === 0 && isPointOnSegment(seg1Start, seg2Start, seg2End)) return true;
+    if (d4 === 0 && isPointOnSegment(seg1End, seg2Start, seg2End)) return true;
+
+    return false;
+}
+
+/**
+ * Helper function to calculate cross product of two 2D vectors.
+ * 
+ * @param {number} ax - X component of first vector
+ * @param {number} ay - Y component of first vector  
+ * @param {number} bx - X component of second vector
+ * @param {number} by - Y component of second vector
+ * @returns {number} Cross product result
+ */
+function crossProduct(ax, ay, bx, by) {
+    return ax * by - ay * bx;
+}
+
+/**
+ * Tests if a point lies on a line segment.
+ * 
+ * @param {Object} point - Point to test {x, y}
+ * @param {Object} segStart - Segment start point {x, y}
+ * @param {Object} segEnd - Segment end point {x, y}
+ * @returns {boolean} True if point is on segment
+ */
+function isPointOnSegment(point, segStart, segEnd) {
+    const { x: px, y: py } = point;
+    const { x: sx, y: sy } = segStart;
+    const { x: ex, y: ey } = segEnd;
+
+    return px >= Math.min(sx, ex) && px <= Math.max(sx, ex) &&
+           py >= Math.min(sy, ey) && py <= Math.max(sy, ey);
+}
+
+/**
  * Sanitizes SVG content to allow only specific tags and attributes safe for metro maps.
  * Prevents XSS attacks while preserving legitimate SVG functionality.
  * 
@@ -1008,6 +1075,274 @@ export function sanitizeMapContent(content) {
     } catch (error) {
         console.error('Error sanitizing SVG content:', error);
         throw new Error(`Failed to sanitize SVG content: ${error.message}`);
+    }
+}
+
+//############################################################################################
+// ## SPATIAL INDEXING FOR PERFORMANCE OPTIMIZATION
+//
+
+/**
+ * SpatialGrid class for efficient spatial indexing of metroline segments.
+ * Optimizes metroline detection by organizing segments into a spatial grid structure.
+ * 
+ * Performance benefits:
+ * - Reduces O(n) search to O(1) average case for spatial queries
+ * - Dramatically improves performance for large metro maps with many lines
+ * - Optimizes connection station detection and intersection testing
+ */
+export class SpatialGrid {
+    /**
+     * Creates a new SpatialGrid for metroline segment indexing.
+     * 
+     * @param {number} cellSize - Size of each grid cell in pixels (default: 50)
+     * @param {number} mapWidth - Width of the map canvas (default: 2000)
+     * @param {number} mapHeight - Height of the map canvas (default: 2000)
+     */
+    constructor(cellSize = 50, mapWidth = 2000, mapHeight = 2000) {
+        this.cellSize = cellSize;
+        this.mapWidth = mapWidth;
+        this.mapHeight = mapHeight;
+        this.grid = new Map(); // Key: "x,y", Value: Set of segments
+        this.segmentToMetroline = new Map(); // Maps segments to their parent metroline
+        
+        // Performance metrics
+        this.totalSegments = 0;
+        this.lastQueryTime = 0;
+    }
+
+    /**
+     * Converts world coordinates to grid cell coordinates.
+     * 
+     * @param {number} x - World x coordinate
+     * @param {number} y - World y coordinate
+     * @returns {Object} Grid cell coordinates {gridX, gridY}
+     */
+    worldToGrid(x, y) {
+        return {
+            gridX: Math.floor(x / this.cellSize),
+            gridY: Math.floor(y / this.cellSize)
+        };
+    }
+
+    /**
+     * Generates a unique key for a grid cell.
+     * 
+     * @param {number} gridX - Grid x coordinate
+     * @param {number} gridY - Grid y coordinate
+     * @returns {string} Grid cell key
+     */
+    getCellKey(gridX, gridY) {
+        return `${gridX},${gridY}`;
+    }
+
+    /**
+     * Gets all grid cells that a line segment intersects.
+     * Uses Bresenham-like algorithm for efficient line traversal.
+     * 
+     * @param {Object} segment - Line segment with start and end points
+     * @returns {Array<string>} Array of cell keys the segment intersects
+     */
+    getSegmentCells(segment) {
+        const { start, end } = segment;
+        const startGrid = this.worldToGrid(start.x, start.y);
+        const endGrid = this.worldToGrid(end.x, end.y);
+        
+        const cells = new Set();
+        
+        // Use Bresenham-like algorithm to find all cells the line passes through
+        const dx = Math.abs(endGrid.gridX - startGrid.gridX);
+        const dy = Math.abs(endGrid.gridY - startGrid.gridY);
+        const sx = startGrid.gridX < endGrid.gridX ? 1 : -1;
+        const sy = startGrid.gridY < endGrid.gridY ? 1 : -1;
+        
+        let err = dx - dy;
+        let currentX = startGrid.gridX;
+        let currentY = startGrid.gridY;
+        
+        while (true) {
+            cells.add(this.getCellKey(currentX, currentY));
+            
+            if (currentX === endGrid.gridX && currentY === endGrid.gridY) break;
+            
+            const e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                currentX += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                currentY += sy;
+            }
+        }
+        
+        return Array.from(cells);
+    }
+
+    /**
+     * Adds a metroline segment to the spatial index.
+     * 
+     * @param {Object} segment - Line segment with start, end points and metadata
+     * @param {Object} metroline - The metroline object this segment belongs to
+     */
+    addSegment(segment, metroline) {
+        const cells = this.getSegmentCells(segment);
+        
+        cells.forEach(cellKey => {
+            if (!this.grid.has(cellKey)) {
+                this.grid.set(cellKey, new Set());
+            }
+            this.grid.get(cellKey).add(segment);
+        });
+        
+        this.segmentToMetroline.set(segment, metroline);
+        this.totalSegments++;
+    }
+
+    /**
+     * Removes a segment from the spatial index.
+     * 
+     * @param {Object} segment - The segment to remove
+     */
+    removeSegment(segment) {
+        const cells = this.getSegmentCells(segment);
+        
+        cells.forEach(cellKey => {
+            const cellSegments = this.grid.get(cellKey);
+            if (cellSegments) {
+                cellSegments.delete(segment);
+                if (cellSegments.size === 0) {
+                    this.grid.delete(cellKey);
+                }
+            }
+        });
+        
+        this.segmentToMetroline.delete(segment);
+        this.totalSegments--;
+    }
+
+    /**
+     * Queries segments within a bounding box.
+     * Returns only segments that are spatially close to the query area.
+     * 
+     * @param {Object} bounds - Bounding box {x, y, width, height}
+     * @returns {Array<Object>} Array of candidate segments with their metrolines
+     */
+    query(bounds) {
+        const startTime = performance.now();
+        
+        const { x, y, width, height } = bounds;
+        const startGrid = this.worldToGrid(x, y);
+        const endGrid = this.worldToGrid(x + width, y + height);
+        
+        const candidateSegments = new Set();
+        const results = [];
+        
+        // Check all grid cells that intersect with the bounding box
+        for (let gridX = startGrid.gridX; gridX <= endGrid.gridX; gridX++) {
+            for (let gridY = startGrid.gridY; gridY <= endGrid.gridY; gridY++) {
+                const cellKey = this.getCellKey(gridX, gridY);
+                const cellSegments = this.grid.get(cellKey);
+                
+                if (cellSegments) {
+                    cellSegments.forEach(segment => {
+                        if (!candidateSegments.has(segment)) {
+                            candidateSegments.add(segment);
+                            const metroline = this.segmentToMetroline.get(segment);
+                            if (metroline) {
+                                results.push({ segment, metroline });
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        
+        this.lastQueryTime = performance.now() - startTime;
+        return results;
+    }
+
+    /**
+     * Adds all segments from a metroline to the spatial index.
+     * 
+     * @param {Object} metroline - Metroline object with polylines property
+     */
+    addMetroline(metroline) {
+        if (!metroline.polylines) return;
+        
+        metroline.polylines.forEach(polyline => {
+            const points = Array.from(polyline.points);
+            
+            for (let i = 0; i < points.length - 1; i++) {
+                const segment = {
+                    start: { x: points[i].x, y: points[i].y },
+                    end: { x: points[i + 1].x, y: points[i + 1].y },
+                    polyline,
+                    metrolineId: metroline.getId()
+                };
+                
+                this.addSegment(segment, metroline);
+            }
+        });
+    }
+
+    /**
+     * Removes all segments from a metroline from the spatial index.
+     * 
+     * @param {Object} metroline - Metroline object to remove
+     */
+    removeMetroline(metroline) {
+        // Find and remove all segments belonging to this metroline
+        const segmentsToRemove = [];
+        this.segmentToMetroline.forEach((ml, segment) => {
+            if (ml === metroline) {
+                segmentsToRemove.push(segment);
+            }
+        });
+        
+        segmentsToRemove.forEach(segment => this.removeSegment(segment));
+    }
+
+    /**
+     * Rebuilds the entire spatial index from scratch.
+     * Call this when the map dimensions change or after major updates.
+     * 
+     * @param {Array<Object>} metrolines - Array of all metrolines to index
+     */
+    rebuild(metrolines, mapWidth = null, mapHeight = null) {
+        // Clear existing index
+        this.clear();
+        
+        // Update dimensions if provided
+        if (mapWidth !== null) this.mapWidth = mapWidth;
+        if (mapHeight !== null) this.mapHeight = mapHeight;
+        
+        // Re-add all metrolines
+        metrolines.forEach(metroline => this.addMetroline(metroline));
+    }
+
+    /**
+     * Clears the entire spatial index.
+     */
+    clear() {
+        this.grid.clear();
+        this.segmentToMetroline.clear();
+        this.totalSegments = 0;
+    }
+
+    /**
+     * Gets performance statistics for the spatial index.
+     * 
+     * @returns {Object} Performance metrics
+     */
+    getStats() {
+        return {
+            totalSegments: this.totalSegments,
+            totalCells: this.grid.size,
+            avgSegmentsPerCell: this.grid.size > 0 ? this.totalSegments / this.grid.size : 0,
+            lastQueryTime: this.lastQueryTime,
+            memoryUsage: this.grid.size * 50 // Rough estimate in bytes
+        };
     }
 }
 
