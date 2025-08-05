@@ -12,9 +12,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js"></script>
     <script src="https://unpkg.com/i18next@25.3.2/dist/umd/i18next.min.js"></script>
     <script type="module">
-      import * as metrolineinterface from "./sources/metromapinterface.js";
+      import * as application from "./sources/application.js";
       // Dynamically attach all exported functions to the global window object
-      Object.entries(metrolineinterface).forEach(([key, value]) => {
+      Object.entries(application).forEach(([key, value]) => {
         if (typeof value === 'function') {
           window[key] = value; // Attach function to window
         }
@@ -55,13 +55,13 @@
           </select>
           
           <!-- Action buttons -->
-          <button class="btn btn-light btn-present px-3 me-2"  onclick="metroMapDownloadPNG()">
+          <button class="btn btn-light btn-present px-3 me-2"  onclick="exportFunctions.metroMapDownloadPNG(window.metromapApp)">
             <i class="fas fa-download me-2"></i><span id="i18n_nav_export"></span>
           </button>
           <button class="btn btn-light btn-present px-3 me-2" id="mapUploadButtonNav">
             <i class="fas fa-upload me-2"></i><span id="i18n_nav_open"></span>
           </button>
-          <button class="btn btn-primary btn-share px-3"  onclick="metroMapDownloadSVG()">
+          <button class="btn btn-primary btn-share px-3"  onclick="exportFunctions.metroMapDownloadSVG(window.metromapApp)">
             <i class="fas fa-save me-2"></i><span id="i18n_nav_save"></span>
           </button>
         </div>
@@ -87,7 +87,7 @@
                 type="text"
                 class="form-control w-25"
                 id="stationEditorName"
-                oninput="changeStationName(this)"
+                oninput="stationEditor.changeStationName(this)"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
                 data-bs-custom-class="custom-tooltip"
@@ -96,7 +96,7 @@
               <span class="input-group-text" id="i18n_station_editor_shape"></span>
               <select
                 id="editStationType"
-                onchange="changeStationType(this)"
+                onchange="stationEditor.changeStationType(this)"
                 class="form-select"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -113,7 +113,7 @@
               <span class="input-group-text" id="i18n_station_editor_rotate_text"></span>
               <select
                 id="stationEditorOrientation"
-                onchange="changeStationOrientation(this)"
+                onchange="ui.changeStationOrientation(this)"
                 class="form-select"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -137,7 +137,7 @@
                 id="stationEditorDate"
                 class="form-control"
                 style="width: 15%"
-                oninput="changeStationDate(this)"
+                oninput="stationEditor.changeStationDate(this)"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
                 data-bs-custom-class="custom-tooltip"
@@ -147,7 +147,7 @@
               <select
                 id="editStationShapeType"
                 class="form-select"
-                onchange="changeStationShape(this)"
+                onchange="stationEditor.changeStationShape(this)"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
                 data-bs-custom-class="custom-tooltip"
@@ -162,7 +162,7 @@
               <select
                 id="editStationSize"
                 disabled
-                onchange="changeStationSize(this)"
+                onchange="stationEditor.changeStationSize(this)"
                 class="form-select"
                 data-bs-toggle="tooltip"
                 data-bs-placement="right"
@@ -189,7 +189,7 @@
               type="text"
               id="stationEditorBeschrijving"
               class="form-control"
-              oninput="changeStationDescription(this)"
+              oninput="stationEditor.changeStationDescription(this)"
               data-bs-toggle="tooltip"
               data-bs-placement="right"
               data-bs-custom-class="custom-tooltip"
@@ -205,7 +205,7 @@
               type="text"
               id="stationEditorLink"
               class="form-control"
-              oninput="changeStationLink(this)"
+              oninput="stationEditor.changeStationLink(this)"
               data-bs-toggle="tooltip"
               data-bs-placement="right"
               data-bs-custom-class="custom-tooltip"
@@ -234,7 +234,7 @@
         <button
           class="btn"
           id="kleurToevoegenButton"
-          onclick="addColorButton()"
+          onclick="toolbar.addColorButton(window.metromapApp)"
           title="kleur toevoegen"
           data-bs-toggle="tooltip"
           data-bs-placement="right"
@@ -259,7 +259,7 @@
           data-bs-custom-class="custom-tooltip"
           data-bs-title="Normaal station tekenen"
           data-i18n-key="i18n_tooltip_normaalStation"
-          onclick="useTool('normalStationTool')">
+          onclick="toolbar.useTool('normalStationTool', window.metromapApp)">
           <i class="fa-solid fa-circle"></i>
         </button>
         <button
@@ -271,7 +271,7 @@
           data-bs-custom-class="custom-tooltip"
           data-bs-title="Start station tekenen"
           data-i18n-key="i18n_tooltip_startStation"
-          onclick="useTool('startStationTool')">
+          onclick="toolbar.useTool('startStationTool', window.metromapApp)">
           <i class="fa-solid fa-circle-dot"></i>
         </button>
         <button
@@ -283,7 +283,7 @@
           data-bs-custom-class="custom-tooltip"
           data-bs-title="Eind station tekenen"
           data-i18n-key="i18n_tooltip_eindStation"
-          onclick="useTool('endStationTool')">
+          onclick="toolbar.useTool('endStationTool', window.metromapApp)">
           <i class="fa-regular fa-circle-dot"></i>
         </button>
         <button
@@ -295,14 +295,14 @@
           data-bs-custom-class="custom-tooltip"
           data-bs-title="Transfer station tekenen"
           data-i18n-key="i18n_tooltip_overstapStation"
-          onclick="useTool('connectionStationTool')">
+          onclick="toolbar.useTool('connectionStationTool', window.metromapApp)">
           <i class="fa-solid fa-toggle-on"></i>
         </button>
         <button
           class="btn selectAble"
           id="stationEditTool"
           title="Station verplaatser"
-          onclick="useTool('stationEditTool')"
+          onclick="toolbar.useTool('stationEditTool', window.metromapApp)"
           data-bs-toggle="tooltip"
           data-bs-placement="right"
           data-bs-custom-class="custom-tooltip"
@@ -331,7 +331,7 @@
         <button
           class="btn selectAble"
           id="eraserTool"
-          onclick="useTool('eraserTool')"
+          onclick="toolbar.useTool('eraserTool', window.metromapApp)"
           title="verwijder tool"
           data-bs-toggle="tooltip"
           data-bs-placement="right"
@@ -343,7 +343,7 @@
         <button
           class="btn selectAble"
           id="textEditTool"
-          onclick="useTool('textEditTool')"
+          onclick="toolbar.useTool('textEditTool', window.metromapApp)"
           title="tekst tool"
           data-bs-toggle="tooltip"
           data-bs-placement="right"
@@ -415,7 +415,7 @@
         <button
           class="btn selectAble"
           id="moveTool"
-          onclick="useTool('moveTool')"
+          onclick="toolbar.useTool('moveTool', window.metromapApp)"
           title="Verplaats tool"
           data-bs-toggle="tooltip"
           data-bs-placement="right"
@@ -463,13 +463,13 @@
           <button class="btn btn-outline-light w-100 text-start" id="mapUploadButton">
             <i class="fa-solid fa-upload me-2"></i><span id="i18n_uploadMetrokaart"></span>
           </button>
-          <button class="btn btn-outline-light w-100 text-start" onclick="metroMapDownloadSVG()">
+          <button class="btn btn-outline-light w-100 text-start" onclick="exportFunctions.metroMapDownloadSVG(window.metromapApp)">
             <i class="fa-solid fa-file-export me-2"></i><span id="i18n_downloadSVG"></span>
           </button>
-          <button class="btn btn-outline-light w-100 text-start" onclick="metroMapDownloadPNG()">
+          <button class="btn btn-outline-light w-100 text-start" onclick="exportFunctions.metroMapDownloadPNG(window.metromapApp)">
             <i class="fa-solid fa-download me-2"></i><span id="i18n_downloadPNG"></span>
           </button>
-          <button class="btn btn-outline-light w-100 text-start" onclick="metroMapShare()">
+          <button class="btn btn-outline-light w-100 text-start" onclick="exportFunctions.metroMapShare(window.metromapApp)">
             <i class="fa-solid fa-share-nodes me-2"></i><span id="i18n_metrokaartDelen"></span>
           </button>
           <div class="mt-3">
@@ -499,7 +499,7 @@
             <div class="input-group mb-3">
               <input type="text" class="form-control" id="uniqueLinkInput" />
               <div class="input-group-append">
-                <button class="btn btn-outline-secondary" type="button" onclick="saveUrlClipboard()">
+                <button class="btn btn-outline-secondary" type="button" onclick="ui.saveUrlClipboard()">
                   <i class="fa-regular fa-clipboard"></i>
                 </button>
               </div>
@@ -520,7 +520,7 @@
       <button
         class="btn"
         id="zoomOutButton"
-        onclick="metroMapZoomOut()"
+        onclick="ui.metroMapZoomOut()"
         title="Zoom uit"
         data-bs-toggle="tooltip"
         data-bs-placement="top"
@@ -533,7 +533,7 @@
       <div 
         class="zoom-display" 
         id="zoomDisplay" 
-        onclick="resetZoom()"
+        onclick="ui.resetZoom()"
         style="cursor: pointer;"
         title="Klik om te resetten naar 100%"
         data-bs-toggle="tooltip"
@@ -544,7 +544,7 @@
       <button
         class="btn"
         id="zoomInButton"
-        onclick="metroMapZoomIn()"
+        onclick="ui.metroMapZoomIn()"
         title="Zoom in"
         data-bs-toggle="tooltip"
         data-bs-placement="top"
@@ -557,7 +557,7 @@
       <button
         class="btn"
         id="gridButton"
-        onclick="gridToggle()"
+        onclick="toolbar.gridToggle(window.metromapApp)"
         title="Grid aan/uit"
         data-bs-toggle="tooltip"
         data-bs-placement="top"

@@ -385,9 +385,9 @@ body, html {
 
 /* Color picker styling */
 .toolbarTool input[type="color"] {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.1);
   cursor: pointer;
   padding: 0;
@@ -404,12 +404,11 @@ body, html {
 }
 
 .toolbarTool #metroline-buttons .metro-button {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-  flex-grow: 1;
-  min-width: 24px;
+  border-radius: 50%;
+  min-width: 28px;
 }
 
 /* Legacy styles - keeping for compatibility */
