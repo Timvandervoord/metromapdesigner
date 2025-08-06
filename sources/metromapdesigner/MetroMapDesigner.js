@@ -1461,10 +1461,10 @@ export default class MetroMapDesigner {
      * @param {string} code - The share code for the map.
      * @throws {Error} Throws an error if the share code is invalid or expired.
      */
-    loadMapWithSvgCode(code) {
+    async loadMapWithSvgCode(code) {
       // Clear map first
       this.clearMap();
-      const svgContent = this.importExport.retrieveAndLoadSVG(code);
+      const svgContent = await this.importExport.retrieveAndLoadSVG(code);
       this.loadMap(svgContent);
     }
 

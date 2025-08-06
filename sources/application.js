@@ -214,16 +214,16 @@ export async function loadInterface() {
  * 
  * @private
  */
-function loadSharedMapFromUrl() {
+async function loadSharedMapFromUrl() {
   const urlParams = new URLSearchParams(window.location.search);
   const svgCode = urlParams.get(config.applicationConfig.shareCodeParameter);
   const jsonCode = urlParams.get(config.applicationConfig.jsconCodeParameter);
 
   // Helper function to handle map loading with error handling
-  const loadMapCode = (code, loadFunction, mapType) => {
+  const loadMapCode = async (code, loadFunction, mapType) => {
     if (code) {
       try {
-        loadFunction(code);
+        await loadFunction(code);
       } catch (e) {
         console.warn(e);
         ui.showAlert(`Error retrieving ${mapType} metro map: ${e}`, "danger");
@@ -233,10 +233,10 @@ function loadSharedMapFromUrl() {
 
   // Load SVG format first, if available
   if (svgCode) {
-    loadMapCode(svgCode, metromapdesignapplication.loadMapWithSvgCode.bind(metromapdesignapplication), "SVG");
+    await loadMapCode(svgCode, metromapdesignapplication.loadMapWithSvgCode.bind(metromapdesignapplication), "SVG");
   } else if (jsonCode) {
     // Only load JSON if SVG is not available
-    loadMapCode(jsonCode, metromapdesignapplication.loadMapWithJsonCode.bind(metromapdesignapplication), "JSON");
+    await loadMapCode(jsonCode, metromapdesignapplication.loadMapWithJsonCode.bind(metromapdesignapplication), "JSON");
   }
 }
 
