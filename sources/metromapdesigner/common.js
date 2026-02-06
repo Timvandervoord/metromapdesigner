@@ -1,8 +1,12 @@
-import * as config from './config.js';
+import * as config from './config.js?v=1.0.4';
 
 //############################################################################################
 // ## COMMON HELPER FUNCTIONS
 const svgNS = "http://www.w3.org/2000/svg";
+
+// Reusable canvas for text measurement (avoids DOM manipulation)
+const measureCanvas = document.createElement('canvas');
+const measureCtx = measureCanvas.getContext('2d');
 
 /**
  * Enables inline text editing for an SVG text or tspan element using foreignObject.
@@ -115,21 +119,10 @@ export function enableInlineTextEditing(textElement, options = {}) {
   input.style.textAlign = parentText.getAttribute("text-anchor") === "middle" ? "center" : 
                           parentText.getAttribute("text-anchor") === "end" ? "right" : "left";
 
-  // Auto-resize function to grow input with text
+  // Auto-resize function to grow input with text (uses canvas for performance)
   const resizeInput = () => {
-    const tempSpan = document.createElement('span');
-    tempSpan.style.fontSize = input.style.fontSize;
-    tempSpan.style.fontFamily = input.style.fontFamily;
-    tempSpan.style.fontWeight = input.style.fontWeight;
-    tempSpan.style.visibility = 'hidden';
-    tempSpan.style.position = 'absolute';
-    tempSpan.style.whiteSpace = 'nowrap';
-    tempSpan.textContent = input.value || input.placeholder || '';
-    
-    document.body.appendChild(tempSpan);
-    const textWidth = tempSpan.offsetWidth;
-    document.body.removeChild(tempSpan);
-    
+    measureCtx.font = `${input.style.fontWeight} ${input.style.fontSize} ${input.style.fontFamily}`;
+    const textWidth = measureCtx.measureText(input.value || input.placeholder || '').width;
     const newWidth = Math.max(textWidth + 10, width);
     foreignObject.setAttribute('width', newWidth);
   };
@@ -288,21 +281,6 @@ export function setTranslate(element, x, y) {
   }
   
 /**
- * Offsets the current translation of an SVG element by specified values.
- *
- * @param {SVGElement} element - The SVG element to offset.
- * @param {number} [offSetX=0] - The x offset.
- * @param {number} [offSetY=0] - The y offset.
- */
-export function setTranslateOffset(element, offSetX = 0, offSetY = 0) {
-    if (element instanceof SVGElement) {
-      // Get current x and y
-      let translate = getTranslate(element);
-      setTranslate(element, translate[0] + offSetX, translate[1] + offSetY);
-    }
-  }
-
-/**
  * Updates only the translation component of an SVG element's transform attribute.
  *
  * @param {SVGElement} element - The SVG element to update.
@@ -352,96 +330,96 @@ export function parseTransform(transformStr) {
     return { translate, rotate };
   }
 
-/**
- * Retrieves the mouse position relative to an SVG element.
- *
- * @param {Event} evt - The event object.
- * @param {Object} map - The map object containing the SVG element.
- * @returns {Object} An object with x and y coordinates.
- */
-let mouseRecentlyUsed = false;
-let lastKnownPosition = { x: 0, y: 0 }; // Store last known position to avoid circular dependency
+  /**
+   * Retrieves the mouse position relative to an SVG element.
+   *
+   * @param {Event} evt - The event object.
+   * @param {Object} map - The map object containing the SVG element.
+   * @returns {Object} An object with x and y coordinates.
+   */
+  let mouseRecentlyUsed = false;
+  let mouseTimeoutId = null;
+  let lastKnownPosition = { x: 0, y: 0 }; // Store last known position to avoid circular dependency
+  const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  const isValidCoord = (n) => typeof n === 'number' && !isNaN(n);
 
-export function getMousePos(evt, map) {
-    let x, y;
-    let svgElement = map.getCanvas();
-    if (!svgElement) {
-        console.warn('getMousePos: No SVG element found, returning last known position');
-        return { ...lastKnownPosition }; // Return copy of last known position
-    }
-  
-    // Is this a touch interface or normal mouse interface?
-    var isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
-  
-    // Check the type of event
-    if (evt.type.startsWith("mouse") || evt.type.startsWith("click")) {
-      mouseRecentlyUsed = true;
-      setTimeout(() => {
-        mouseRecentlyUsed = false;
-      }, 2000); // reset after 2 seconds of inactivity
-    } else if (mouseRecentlyUsed) {
-      // Return last known position instead of undefined
-      return { ...lastKnownPosition };
-    }
-  
-    if (!isTouchDevice || mouseRecentlyUsed) {
-      x = evt.clientX || 0;
-      y = evt.clientY || 0;
-    } else {
-      evt.preventDefault(); // prevent default behavior like scrolling
-      var touch = evt.touches[0];
-      // Use lastKnownPosition instead of map.mousePosition to avoid circular dependency
-      x = typeof touch !== "undefined" ? touch.clientX : lastKnownPosition.x;
-      y = typeof touch !== "undefined" ? touch.clientY : lastKnownPosition.y;
-    }
+  export function getMousePos(evt, map) {
+      let x, y;
+      let svgElement = map.getCanvas();
+      if (!svgElement) {
+          console.warn('getMousePos: No SVG element found, returning last known position');
+          return { ...lastKnownPosition }; // Return copy of last known position
+      }
+    
+      // Check the type of event
+      if (evt.type.startsWith("mouse") || evt.type.startsWith("click")) {
+        mouseRecentlyUsed = true;
+        clearTimeout(mouseTimeoutId);
+        mouseTimeoutId = setTimeout(() => {
+          mouseRecentlyUsed = false;
+        }, 2000); // reset after 2 seconds of inactivity
+      } else if (mouseRecentlyUsed) {
+        // Return last known position instead of undefined
+        return { ...lastKnownPosition };
+      }
+    
+      if (!isTouchDevice || mouseRecentlyUsed) {
+        x = evt.clientX || 0;
+        y = evt.clientY || 0;
+      } else {
+        evt.preventDefault(); // prevent default behavior like scrolling
+        var touch = evt.touches[0];
+        // Use lastKnownPosition instead of map.mousePosition to avoid circular dependency
+        x = typeof touch !== "undefined" ? touch.clientX : lastKnownPosition.x;
+        y = typeof touch !== "undefined" ? touch.clientY : lastKnownPosition.y;
+      }
 
-    // Validate coordinates
-    if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
-        console.warn('getMousePos: Invalid coordinates detected, using last known position');
-        return { ...lastKnownPosition };
-    }
-  
-    try {
-        var point = svgElement.createSVGPoint();
-        point.x = x;
-        point.y = y;
-      
-        // Get screen CTM with null check
-        var screenCTM = svgElement.getScreenCTM();
-        if (!screenCTM) {
-            console.warn('getMousePos: getScreenCTM returned null, using fallback calculation');
-            // Fallback: try to get bounding rect and calculate relative position
-            const rect = svgElement.getBoundingClientRect();
-            const relativeX = x - rect.left;
-            const relativeY = y - rect.top;
-            
-            // Store and return the position
-            lastKnownPosition = { x: relativeX, y: relativeY };
-            return { ...lastKnownPosition };
-        }
-      
-        var transform = point.matrixTransform(screenCTM.inverse());
+      // Validate coordinates
+      if (!isValidCoord(x) || !isValidCoord(y)) {
+          console.warn('getMousePos: Invalid coordinates detected, using last known position');
+          return { ...lastKnownPosition };
+      }
+    
+      try {
+          var point = svgElement.createSVGPoint();
+          point.x = x;
+          point.y = y;
         
-        // Validate transform result
-        if (typeof transform.x !== 'number' || typeof transform.y !== 'number' || 
-            isNaN(transform.x) || isNaN(transform.y)) {
-            console.warn('getMousePos: Transform resulted in invalid coordinates');
-            return { ...lastKnownPosition };
-        }
+          // Get screen CTM with null check
+          var screenCTM = svgElement.getScreenCTM();
+          if (!screenCTM) {
+              console.warn('getMousePos: getScreenCTM returned null, using fallback calculation');
+              // Fallback: try to get bounding rect and calculate relative position
+              const rect = svgElement.getBoundingClientRect();
+              const relativeX = x - rect.left;
+              const relativeY = y - rect.top;
+              
+              // Store and return the position
+              lastKnownPosition = { x: relativeX, y: relativeY };
+              return { ...lastKnownPosition };
+          }
         
-        // Store successful position for future fallbacks
-        lastKnownPosition = { x: transform.x, y: transform.y };
-      
-        return {
-          x: transform.x,
-          y: transform.y,
-        };
-    } catch (error) {
-        console.error('getMousePos: Error during coordinate transformation:', error);
-        // Return last known good position
-        return { ...lastKnownPosition };
-    }
-}
+          var transform = point.matrixTransform(screenCTM.inverse());
+          
+          // Validate transform result
+          if (!isValidCoord(transform.x) || !isValidCoord(transform.y)) {
+              console.warn('getMousePos: Transform resulted in invalid coordinates');
+              return { ...lastKnownPosition };
+          }
+          
+          // Store successful position for future fallbacks
+          lastKnownPosition = { x: transform.x, y: transform.y };
+        
+          return {
+            x: transform.x,
+            y: transform.y,
+          };
+      } catch (error) {
+          console.error('getMousePos: Error during coordinate transformation:', error);
+          // Return last known good position
+          return { ...lastKnownPosition };
+      }
+  }
 
   /**
    * Creates a <tspan> SVG element with the specified text and attributes.
@@ -484,23 +462,6 @@ export function getMousePos(evt, map) {
   }
 
   /**
-   * Parses an RGB string like "rgb(227, 32, 23)" into an object with R, G, and B properties.
-   * @param {string} rgbString - The RGB string to parse.
-   * @returns {Object} An object with R, G, and B properties.
-   */
-  export function parseRGBStringSC(rgbString) {
-    const match = rgbString.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-    if (!match) {
-        throw new Error(`Invalid RGB string: ${rgbString}`);
-    }
-    return {
-        r: parseInt(match[1], 10),
-        g: parseInt(match[2], 10),
-        b: parseInt(match[3], 10)
-    };
-  }
-
-  /**
    * Converts a color from hex to RGB format if necessary.
    *
    * @param {string} color - The color string (hex or RGB).
@@ -536,24 +497,6 @@ export function getMousePos(evt, map) {
   }
 
   /**
-   * Extract RGB from string
-   * @param {string} input 
-   * @returns 
-  export function extractRGBValue(input) {
-    // Remove the prefix 'metrolinergb' and extract the numeric values
-    const rgbValues = input.replace('metrolinergb', '');
-
-    // Split the string into three components: red, green, and blue
-    const red = parseInt(rgbValues.substring(0, 3), 10); // First 3 digits
-    const green = parseInt(rgbValues.substring(3, 6), 10); // Next 3 digits
-    const blue = parseInt(rgbValues.substring(6, 9), 10); // Last 3 digits
-
-    // Return the RGB value as a string or object
-    return `rgb(${red}, ${green}, ${blue})`;
-  }
-  */
-  
-  /**
    * Checks if a color string is in RGB format.
    *
    * @param {string} color - The color string to check.
@@ -576,18 +519,16 @@ export function getMousePos(evt, map) {
    * @returns {SVGElement|null} - The nearest editable SVG element, or `null` if none is found.
    */
   export function determineEditableElement(element) {
-    const validIds = ["academyName", "titleText", "legenda", "legendaStations"];
-
     // Traverse up the DOM tree
     while (element instanceof SVGElement) {
         const elementClass = element.getAttribute("class");
         const tagName = element.tagName.toLowerCase();
 
-        // Check for editable element types
-        if (elementClass === "stationGroup" || 
-            tagName === "image" || 
+        // Check for editable element types (uses cached Set for O(1) lookup)
+        if (elementClass === "stationGroup" ||
+            tagName === "image" ||
             (tagName === "polyline" && elementClass !== "legendaPolyline") ||
-            validIds.includes(element.id)) {
+            config.applicationConfig.EDITABLE_ELEMENT_IDS.has(element.id)) {
             return element;
         }
 
@@ -606,27 +547,24 @@ export function getMousePos(evt, map) {
    * @returns {SVGElement|null} - The nearest editable SVG element, or `null` if none is found.
    */
   export function determineEditableTextElement(element) {
-    const validIds = ["academyName", "titleText1", "titleText2"];
-    const validClasses = ["metroLineName", "metroLineTargetGroup", "legendaStationItemSymbol", "legendaStationItemName", "legendaText", "legendaLineText"];
-
     // Traverse up the DOM tree
     while (element instanceof SVGElement) {
+        // Check for known IDs (O(1) lookup)
+        if (config.applicationConfig.EDITABLE_TEXT_IDS.has(element.id)) return element;
+
+        // Check for known classes (O(n) where n = number of classes on element)
         const elClass = element.getAttribute("class");
-        const elId = element.id;
-
-        // Check for known IDs
-        if (validIds.includes(elId)) return element;
-
-        // Check for known classes
-        if (elClass && validClasses.some((validClass) => elClass.split(" ").includes(validClass))) {
-            return element;
+        if (elClass) {
+            const classes = elClass.split(" ");
+            for (const cls of classes) {
+                if (config.applicationConfig.EDITABLE_TEXT_CLASSES.has(cls)) return element;
+            }
         }
 
         // Move up one level in the DOM
         element = element.parentNode;
     }
 
-    // Return null if no editable element is found
     return null;
   }
 
@@ -752,13 +690,6 @@ export function getMousePos(evt, map) {
   }
 
   /**
-   * Flushes all pending DOM operations immediately
-   */
-  export function flushDOMUpdates() {
-    domBatcher.flush();
-  }
-
-  /**
    * Checks if a point lies on or near a line segment within a specified tolerance.
    *
    * @param {number} x1 - The x-coordinate of the first endpoint of the line segment.
@@ -874,29 +805,6 @@ export function pointInPolygon(point, vertices) {
 }
 
 /**
- * Checks if a line segment intersects with a polygon.
- *
- * @param {Object} start - The starting point of the line segment.
- * @param {number} start.x - The x-coordinate of the start point.
- * @param {number} start.y - The y-coordinate of the start point.
- * @param {Object} end - The ending point of the line segment.
- * @param {number} end.x - The x-coordinate of the end point.
- * @param {number} end.y - The y-coordinate of the end point.
- * @param {Array<Object>} vertices - The vertices of the polygon, each with `x` and `y` properties.
- * @returns {boolean} - Returns `true` if the line segment intersects the polygon, otherwise `false`.
- */
-export function lineIntersectsPolygon(start, end, vertices) {
-  for (let i = 0; i < vertices.length; i++) {
-      const v1 = vertices[i];
-      const v2 = vertices[(i + 1) % vertices.length];
-      if (lineIntersectsLine(start, end, v1, v2)) {
-          return true;
-      }
-  }
-  return false;
-}
-
-/**
  * Checks if two line segments intersect.
  *
  * @param {Object} p1 - The start point of the first line segment.
@@ -978,77 +886,49 @@ export function samplePointsOnPolygonEdges(vertices, step) {
   return sampledPoints;
 }
 
+
 /**
- * Tests if two line segments intersect.
- * Uses the cross product method for efficient intersection detection.
- * 
- * @param {Object} seg1Start - Start point of first segment {x, y}
- * @param {Object} seg1End - End point of first segment {x, y}
- * @param {Object} seg2Start - Start point of second segment {x, y}
- * @param {Object} seg2End - End point of second segment {x, y}
- * @returns {boolean} True if segments intersect
+ * Removes polyline elements without valid coordinates (points) from SVG content.
+ * A polyline is considered empty if it has no 'points' attribute or if the points attribute is empty/whitespace.
+ *
+ * @param {string} svgContent - The SVG content to clean.
+ * @returns {string} - The SVG content with empty polylines removed.
  */
-export function lineSegmentsIntersect(seg1Start, seg1End, seg2Start, seg2End) {
-    const { x: x1, y: y1 } = seg1Start;
-    const { x: x2, y: y2 } = seg1End;
-    const { x: x3, y: y3 } = seg2Start;
-    const { x: x4, y: y4 } = seg2End;
+export function removeEmptyPolylines(svgContent) {
+  if (typeof svgContent !== "string" || svgContent.length === 0) return svgContent;
 
-    // Calculate the cross products
-    const d1 = crossProduct(x3 - x1, y3 - y1, x2 - x1, y2 - y1);
-    const d2 = crossProduct(x4 - x1, y4 - y1, x2 - x1, y2 - y1);
-    const d3 = crossProduct(x1 - x3, y1 - y3, x4 - x3, y4 - y3);
-    const d4 = crossProduct(x2 - x3, y2 - y3, x4 - x3, y4 - y3);
+  // Fast path: avoid parsing if there are no polylines at all
+  if (!svgContent.includes("<polyline")) return svgContent;
 
-    // Check if segments intersect
-    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-        return true;
+  try {
+    const doc = new DOMParser().parseFromString(svgContent, "image/svg+xml");
+
+    // More defensive parse error detection across browsers
+    if (doc.getElementsByTagName("parsererror").length) {
+      console.warn("removeEmptyPolylines: SVG parsing error, returning original content");
+      return svgContent;
     }
 
-    // Check for collinear points (on the same line)
-    if (d1 === 0 && isPointOnSegment(seg2Start, seg1Start, seg1End)) return true;
-    if (d2 === 0 && isPointOnSegment(seg2End, seg1Start, seg1End)) return true;
-    if (d3 === 0 && isPointOnSegment(seg1Start, seg2Start, seg2End)) return true;
-    if (d4 === 0 && isPointOnSegment(seg1End, seg2Start, seg2End)) return true;
+    const polylines = doc.getElementsByTagName("polyline"); // live HTMLCollection
+    // Iterate backwards because this collection is live (removals affect indices)
+    for (let i = polylines.length - 1; i >= 0; i--) {
+      const el = polylines[i];
+      const points = el.getAttribute("points");
+      if (!points || !points.trim()) el.remove();
+    }
 
-    return false;
-}
-
-/**
- * Helper function to calculate cross product of two 2D vectors.
- * 
- * @param {number} ax - X component of first vector
- * @param {number} ay - Y component of first vector  
- * @param {number} bx - X component of second vector
- * @param {number} by - Y component of second vector
- * @returns {number} Cross product result
- */
-function crossProduct(ax, ay, bx, by) {
-    return ax * by - ay * bx;
-}
-
-/**
- * Tests if a point lies on a line segment.
- * 
- * @param {Object} point - Point to test {x, y}
- * @param {Object} segStart - Segment start point {x, y}
- * @param {Object} segEnd - Segment end point {x, y}
- * @returns {boolean} True if point is on segment
- */
-function isPointOnSegment(point, segStart, segEnd) {
-    const { x: px, y: py } = point;
-    const { x: sx, y: sy } = segStart;
-    const { x: ex, y: ey } = segEnd;
-
-    return px >= Math.min(sx, ex) && px <= Math.max(sx, ex) &&
-           py >= Math.min(sy, ey) && py <= Math.max(sy, ey);
+    return new XMLSerializer().serializeToString(doc.documentElement);
+  } catch (error) {
+    console.error("removeEmptyPolylines: Error processing SVG:", error);
+    return svgContent;
+  }
 }
 
 /**
  * Sanitizes SVG content to allow only specific tags and attributes safe for metro maps.
  * Prevents XSS attacks while preserving legitimate SVG functionality.
- * 
+ * Also removes polylines without valid coordinates.
+ *
  * @param {string} content - The raw SVG content to sanitize.
  * @returns {string} - The sanitized SVG content safe for innerHTML.
  * @throws {Error} - Throws an error if DOMPurify is not available or sanitization fails.
@@ -1071,7 +951,10 @@ export function sanitizeMapContent(content) {
             throw new Error('SVG content was completely removed during sanitization');
         }
 
-        return sanitized;
+        // Remove polylines without valid coordinates (sanity check)
+        const cleaned = removeEmptyPolylines(sanitized);
+
+        return cleaned;
     } catch (error) {
         console.error('Error sanitizing SVG content:', error);
         throw new Error(`Failed to sanitize SVG content: ${error.message}`);

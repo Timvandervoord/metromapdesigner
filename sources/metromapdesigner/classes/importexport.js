@@ -1,5 +1,5 @@
-import * as config from '../config.js';
-import { sanitizeMapContent } from '../common.js';
+import * as config from '../config.js?v=1.0.4';
+import { sanitizeMapContent } from '../common.js?v=1.0.4';
 
 /**
  * Class for handling the import and export functionalities of a metromap design.
@@ -168,27 +168,38 @@ export default class MetromapImportExport {
    * @returns {Promise<string>} - A promise resolving to the PNG data URL.
    */
   getPng(map) {
-    return new Promise((resolve, reject) => {
-      let svg = null;
-      let url = null;
+    return new Promise(async (resolve, reject) => {
       let canvas = null;
       let img = null;
-      
+
       try {
+        // Wait for all fonts to be loaded before rendering
+        // This ensures custom fonts like Poppins are available for canvas rendering
+        await document.fonts.ready;
+
+        // Explicitly load Poppins font if not already loaded (fallback for systems without the font)
+        try {
+          await document.fonts.load('400 16px Poppins');
+          await document.fonts.load('600 16px Poppins');
+          await document.fonts.load('700 16px Poppins');
+        } catch (fontError) {
+          console.warn('Could not preload Poppins font:', fontError);
+        }
+
         const svgData = this.getSVG(map);
         if (!svgData) {
           throw new Error("No SVG data available for PNG conversion");
         }
-        
+
         img = new Image();
-        svg = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-        url = URL.createObjectURL(svg);
+
+        // Use data URL instead of blob URL for better font embedding support
+        // Base64 encoding ensures the SVG with embedded fonts is fully self-contained
+        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+        const dataUrl = `data:image/svg+xml;base64,${svgBase64}`;
 
         // Set up cleanup timeout as fallback
         const cleanupTimeout = setTimeout(() => {
-          if (url) {
-            URL.revokeObjectURL(url);
-          }
           reject(new Error("PNG conversion timeout"));
         }, 30000); // 30 second timeout
 
@@ -197,11 +208,11 @@ export default class MetromapImportExport {
             clearTimeout(cleanupTimeout);
             canvas = document.createElement("canvas");
             const context = canvas.getContext("2d");
-            
+
             if (!context) {
               throw new Error("Could not get canvas 2D context");
             }
-            
+
             context.imageSmoothingQuality = "high";
             context.textRendering = "geometricPrecision";
 
@@ -213,30 +224,24 @@ export default class MetromapImportExport {
             context.drawImage(img, 0, 0, canvas.width, canvas.height);
 
             const pngDataUrl = canvas.toDataURL("image/png");
-            
+
             // Clean up resources
-            URL.revokeObjectURL(url);
             canvas = null;
             img = null;
-            
+
             resolve(pngDataUrl);
           } catch (error) {
-            URL.revokeObjectURL(url);
             reject(error);
           }
         };
 
         img.onerror = (error) => {
           clearTimeout(cleanupTimeout);
-          URL.revokeObjectURL(url);
           reject(new Error("Failed to load SVG image for PNG conversion: " + error));
         };
 
-        img.src = url;
+        img.src = dataUrl;
       } catch (error) {
-        if (url) {
-          URL.revokeObjectURL(url);
-        }
         reject(error);
       }
     });

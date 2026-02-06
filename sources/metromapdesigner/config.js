@@ -5,6 +5,7 @@
 // Default application configuration
 export let applicationConfig = {
     metrolineColors : [
+        "rgb(240, 137, 0)",
         "rgb(227, 32, 23)",
         "rgb(0, 120, 42)",
         "rgb(0, 152, 212)",
@@ -16,7 +17,6 @@ export let applicationConfig = {
         "rgb(155, 0, 86)",
         "rgb(0, 164, 167)",
         "rgb(164, 90, 42)",
-        "rgb(239, 123, 16)",
       ],
     toolSettings : {
         stationTool: { shape: "normal", cursor: "arrow" },
@@ -33,7 +33,7 @@ export let applicationConfig = {
       maxStateStackSize : 30,
       toleranceMetrolineDetection : 10,
       appName: "MetroMap design studio",
-      appVersion: "release 2025.8.2",
+      appVersion: "release 2026.1.23.1",
       defaultLanguage: "nl",
       languageSelector: "languageSelector",
       canvasSizes: [
@@ -59,11 +59,15 @@ export let applicationConfig = {
         "stationshapetype", "metrolineid", "stationorientation", "position", "dominant-baseline",
         "version", "encoding", "metromapversion", "stationshapeorientation", "stationshapelinewidth"
       ],
-      uploadLink: "https://yourlink/uploadMetroMap",
-      downloadBaseLink: "https://yourlink/?mc=",
-      retrievalLink: "https://yourlink/retrieveMetroMap?code=",
+      uploadLink: "https://tools.smartmakersacademy.nl/sma_backend/sma_backend.php/uploadMetroMap",
+      downloadBaseLink: "https://tools.smartmakersacademy.nl/metromapdesigner/?mc=",
+      retrievalLink: "https://tools.smartmakersacademy.nl/sma_backend/sma_backend.php/retrieveMetroMap?code=",
       shareCodeParameter: "mc",
-      jsconCodeParameter: "json"
+      jsconCodeParameter: "json",
+      // Editable element lookups (Sets for O(1) performance)
+      EDITABLE_ELEMENT_IDS: new Set(["academyName", "titleText", "legenda", "legendaStations", "svgLogo"]),
+      EDITABLE_TEXT_IDS: new Set(["academyName", "titleText1", "titleText2"]),
+      EDITABLE_TEXT_CLASSES: new Set(["metroLineName", "metroLineTargetGroup", "legendaStationItemSymbol", "legendaStationItemName", "legendaText", "legendaLineText"])
 }
 
 export const gridConfig = {
@@ -76,7 +80,7 @@ export const gridConfig = {
 
 export const metrolineConfig = {
   thickness: 20,
-  defaultColor: "rgb(227, 32, 23)"
+  defaultColor: "rgb(240, 137, 0)"
 };
 
 export const legendaConfig = {

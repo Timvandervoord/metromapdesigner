@@ -1,5 +1,5 @@
-import * as helpers from '../common.js';
-import * as config from '../config.js';
+import * as helpers from '../common.js?v=1.0.4';
+import * as config from '../config.js?v=1.0.4';
 
 /**
  * Represents a station on a metro map. 
@@ -122,28 +122,26 @@ export default class metromapStation {
         this.shape = this.refSvg.getAttribute("stationshapetype");
         this.size = Number(this.refSvg.getAttribute("stationshapesize"));
         this.width = Number(this.refSvg.getAttribute("stationshapelinewidth"));
-        this.description = this.refSvg.querySelector("title.stationDescription").textContent;
-        this.type = this.refSvg.querySelector("text.stationType").textContent;
-        this.date = this.stationNameGroupLayer.querySelector("tspan.stationDate").textContent;
-        this.link = this.refSvg.querySelector("a.stationLink").getAttribute("xlink:href");
-        this.externalUniqueID = this.refSvg.getAttribute("externalUniqueID", this.externalUniqueID || "");
+        this.description = this.refSvg.querySelector("title.stationDescription")?.textContent ?? "";
+        this.type = this.refSvg.querySelector("text.stationType")?.textContent ?? "";
+        this.date = this.stationNameGroupLayer?.querySelector("tspan.stationDate")?.textContent ?? "";
+        this.link = this.refSvg.querySelector("a.stationLink")?.getAttribute("xlink:href") ?? "";
+        this.externalUniqueID = this.refSvg.getAttribute("externalUniqueID") ?? this.externalUniqueID ?? "";
 
         // Get X and Y values
         const transform = this.refSvg.getAttribute("transform");
         const { translate, rotate } = helpers.parseTransform(transform);
-        const translateValues = translate.match(/\(([^)]+)\)/)[1].split(",").map(Number); // Extract x and y
-        this.x = translateValues[0];
-        this.y = translateValues[1];
+        const translateMatch = translate?.match(/\(([^)]+)\)/);
+        const translateValues = translateMatch?.[1]?.split(",").map(Number) ?? [0, 0];
+        this.x = translateValues[0] ?? 0;
+        this.y = translateValues[1] ?? 0;
 
-        // Get name value
-        let stationNameTspans = this.stationNameGroupLayer.querySelectorAll("tspan.stationNameRule");
-
-        // Reconstruct the stationname by deconstructing the Tspan elements
-        this.name = "";
-        stationNameTspans.forEach((stationNamePart) => {
-            this.name = this.name + " " + stationNamePart.textContent;
-        });
-        this.name = this.name.trim(); // remove spaces
+        // Get name value - use Array.join() for better performance than string concatenation
+        const stationNameTspans = this.stationNameGroupLayer?.querySelectorAll("tspan.stationNameRule") ?? [];
+        this.name = Array.from(stationNameTspans)
+            .map(tspan => tspan.textContent)
+            .join(" ")
+            .trim();
     }
 
     /**

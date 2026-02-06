@@ -1,5 +1,5 @@
-import * as helpers from '../common.js';
-import * as config from '../config.js';
+import * as helpers from '../common.js?v=1.0.4';
+import * as config from '../config.js?v=1.0.4';
 
 /**
  * This class manages metrolines on a metromap.
@@ -454,7 +454,7 @@ export default class metromapMetroline {
             })
             .filter(line => line !== null);
 
-        const color = helpers.parseRGBStringSC(this.metrolineColor);
+        const color = helpers.parseRGBString(this.metrolineColor);
 
         return {
             metroLineId: this.metrolineID,

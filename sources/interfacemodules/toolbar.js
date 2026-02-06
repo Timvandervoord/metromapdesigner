@@ -1,6 +1,6 @@
-import * as helpers from '../metromapdesigner/common.js';
-import * as config from '../metromapdesigner/config.js';
-import * as ui from './uifunctions.js';
+import * as helpers from '../metromapdesigner/common.js?v=1.0.4';
+import * as config from '../metromapdesigner/config.js?v=1.0.4';
+import * as ui from './uifunctions.js?v=1.0.4';
 
 // Cache for DOM elements to avoid repeated lookups
 let metrolineButtons = null;
@@ -124,11 +124,11 @@ export function generateColorButtons(metromapdesignapplication) {
   });
   
   const currentColors = metromapdesignapplication.getAllMetrolineColors();
-  const currentColorsRgb = currentColors.map(color => helpers.convertToRgb(color));
-  
-  // Remove buttons that are no longer needed
+  const currentColorsRgb = new Set(currentColors.map(color => helpers.convertToRgb(color)));
+
+  // Remove buttons that are no longer needed (O(1) lookup with Set)
   colorButtons.forEach(button => {
-    if (!currentColorsRgb.includes(button.style.backgroundColor)) {
+    if (!currentColorsRgb.has(button.style.backgroundColor)) {
       button.remove();
     }
   });

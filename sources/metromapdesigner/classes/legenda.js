@@ -1,5 +1,5 @@
-import * as helpers from '../common.js';
-import * as config from '../config.js';
+import * as helpers from '../common.js?v=1.0.4';
+import * as config from '../config.js?v=1.0.4';
 
 /**
  * Class representing the legend of a metro map.

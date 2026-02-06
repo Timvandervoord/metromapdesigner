@@ -1,9 +1,9 @@
-import metromap from './classes/metromap.js';
-import MetromapImportExport from './classes/importexport.js';
-import stateManager from './classes/stateManager.js';
-import * as helpers from './common.js';
-import * as config from './config.js';
-import { enableInlineTextEditing as enableTextEditing } from './common.js';
+import metromap from './classes/metromap.js?v=1.0.4';
+import MetromapImportExport from './classes/importexport.js?v=1.0.4';
+import stateManager from './classes/stateManager.js?v=1.0.4';
+import * as helpers from './common.js?v=1.0.4';
+import * as config from './config.js?v=1.0.4';
+import { enableInlineTextEditing as enableTextEditing } from './common.js?v=1.0.4';
 
 /**
  * @class
@@ -560,6 +560,88 @@ export default class MetroMapDesigner {
     }
 
     /**
+     * Migrates old metroline ID format to new format.
+     *
+     * Old format: metrolineid="rgb2401370" (without "metroline" prefix)
+     * New format: metrolineid="metrolinergb2401370" (with "metroline" prefix)
+     *
+     * This method also removes invalid polylines that have no points attribute,
+     * which can occur from interrupted drawing operations in older versions.
+     */
+    migrateOldMetrolineIds() {
+        if (!this.container) {
+            return;
+        }
+
+        const svg = this.container.querySelector("svg");
+        if (!svg) {
+            return;
+        }
+
+        let migrationCount = 0;
+        let removedCount = 0;
+
+        // Find all elements with metrolineid attribute
+        const elementsWithMetrolineId = svg.querySelectorAll("[metrolineid]");
+
+        elementsWithMetrolineId.forEach(element => {
+            const currentId = element.getAttribute("metrolineid");
+
+            // Check if it's old format (starts with "rgb" but not "metroline")
+            // Handle comma-separated IDs for connection stations
+            if (currentId && !currentId.startsWith("metroline")) {
+                const oldIds = currentId.split(",").map(id => id.trim());
+                const newIds = oldIds.map(id => {
+                    // Only convert if it starts with "rgb" and doesn't already have prefix
+                    if (id.startsWith("rgb") && !id.startsWith("metroline")) {
+                        return "metroline" + id;
+                    }
+                    return id;
+                });
+
+                const newId = newIds.join(",");
+                element.setAttribute("metrolineid", newId);
+
+                // Also update class attribute if it matches old format
+                const currentClass = element.getAttribute("class");
+                if (currentClass) {
+                    let newClass = currentClass;
+                    oldIds.forEach((oldId, index) => {
+                        if (oldId.startsWith("rgb") && !oldId.startsWith("metroline")) {
+                            // Replace class like "metrolinergb2401370" stays the same
+                            // But if class is just "rgb2401370", convert it
+                            newClass = newClass.replace(
+                                new RegExp(`\\b${oldId}\\b`, 'g'),
+                                newIds[index]
+                            );
+                        }
+                    });
+                    if (newClass !== currentClass) {
+                        element.setAttribute("class", newClass);
+                    }
+                }
+
+                migrationCount++;
+            }
+        });
+
+        // Remove polylines without points attribute (invalid/corrupted elements)
+        const polylines = svg.querySelectorAll("polyline");
+        polylines.forEach(polyline => {
+            const points = polyline.getAttribute("points");
+            if (!points || points.trim() === "") {
+                console.warn("Removing invalid polyline without points:", polyline);
+                polyline.remove();
+                removedCount++;
+            }
+        });
+
+        if (migrationCount > 0 || removedCount > 0) {
+            console.log(`Migration complete: ${migrationCount} metroline IDs updated, ${removedCount} invalid polylines removed`);
+        }
+    }
+
+    /**
      * Moves all elements on the map (stations and lines) along the grid by a specified direction and amount.
      * 
      * This function saves the current state of the map before making changes and moves all elements 
@@ -650,6 +732,10 @@ export default class MetroMapDesigner {
       const isImage = (el) =>
         el instanceof SVGElement && el.tagName.toLowerCase() === "image";
 
+      // Helper function to check if element is the logo
+      const isLogo = (el) =>
+        el instanceof SVGElement && el.id === "svgLogo";
+
       // Update mouse position
       if (!this.map) {
         console.warn('mouseDownCanvas: No map available');
@@ -728,6 +814,15 @@ export default class MetroMapDesigner {
                 this.stateManager.saveState(this.map);
               }
               // Remove image element
+              selectedElement.remove();
+              break;
+          }
+          if (isLogo(selectedElement)) {
+              // Save state before changes
+              if (this.stateManager) {
+                this.stateManager.saveState(this.map);
+              }
+              // Remove logo element
               selectedElement.remove();
               break;
           }
@@ -858,12 +953,12 @@ export default class MetroMapDesigner {
      *
      * @param {MouseEvent | TouchEvent} e - The event object representing the mouse or touch interaction.
      */
-    mouseMoveCanvas = (e) => {
+    mouseMoveCanvas = helpers.throttle((e) => {
       // Update mouse position
       if (!this.map) {
         return; // Silently return if no map available during movement
       }
-      
+
       this.mousePosition = helpers.getMousePos(e, this.map);
 
       // What to do?
@@ -873,7 +968,7 @@ export default class MetroMapDesigner {
       if (this.drawingLine) this.map.drawMetroline(this.mousePosition);
       if (this.scalingImage && this.currentResizeHandle) this.resizeImageWithHandle(this.mousePosition);
       if (this.movingImage) this.moveImage(this.mousePosition);
-    }
+    }, 16); // Throttle to ~60fps for smooth performance
 
     /**
      * Scales an image based on mouse movement from the center point.
@@ -1038,17 +1133,23 @@ export default class MetroMapDesigner {
         width: bbox.width * this.imageTransform.scale,
         height: bbox.height * this.imageTransform.scale
       };
-      
+
+      // Guard against division by zero
+      if (currentSize.width <= 0 || currentSize.height <= 0) {
+        console.warn('resizeImageWithHandle: Invalid image dimensions, skipping resize');
+        return;
+      }
+
       // Handle configuration: [xMultiplier, yMultiplier, anchorX, anchorY]
       const handleConfig = {
         se: [1, 1, 0, 0],         // grow right+down, anchor top-left
-        sw: [-1, 1, 1, 0],        // grow left+down, anchor top-right  
+        sw: [-1, 1, 1, 0],        // grow left+down, anchor top-right
         ne: [1, -1, 0, 1],        // grow right+up, anchor bottom-left
         nw: [-1, -1, 1, 1]        // grow left+up, anchor bottom-right
       };
-      
+
       const [xMult, yMult, anchorXRatio, anchorYRatio] = handleConfig[this.currentResizeHandle] || [1, 1, 0, 0];
-      
+
       // Calculate scale factors for both dimensions
       const scaleX = (currentSize.width + delta.x * xMult) / currentSize.width;
       const scaleY = (currentSize.height + delta.y * yMult) / currentSize.height;
@@ -1307,15 +1408,31 @@ export default class MetroMapDesigner {
     loadMap(svgcontent = null, trusted = false) {
         if(!svgcontent) svgcontent = this.defaultMap;
 
-        // Check if content is SVG
-        if (svgcontent.trim().substring(0, 4).toLowerCase() !== "<svg") {
-        alert("Invalid content. Only SVG images are accepted.");
-        return;
+        // Validate SVG content using DOM parsing (more robust than string check)
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgcontent, 'image/svg+xml');
+
+            // Check for parsing errors
+            const parserError = doc.querySelector('parsererror');
+            if (parserError) {
+                throw new Error('XML parsing failed');
+            }
+
+            // Verify root element is SVG
+            const svgElement = doc.documentElement;
+            if (!svgElement || svgElement.nodeName.toLowerCase() !== 'svg') {
+                throw new Error('Root element is not SVG');
+            }
+        } catch (error) {
+            console.error('SVG validation failed:', error);
+            alert('Invalid content. Only valid SVG images are accepted.');
+            return;
         }
-    
+
         // Clean up existing event listeners before replacing content
         this.removeMapEventListeners();
-        
+
         // Sanitize untrusted content to prevent XSS attacks
         let finalSvgContent = svgcontent;
         if (!trusted) {
@@ -1333,7 +1450,13 @@ export default class MetroMapDesigner {
         
         // Migrate old logo layer to new imageLayer if present
         this.migrateLogoLayerToImages();
-        
+
+        // Migrate old metroline IDs (rgb*) to new format (metrolinergb*)
+        // Only for untrusted content (uploaded files, shared maps) - not for undo/redo
+        if (!trusted) {
+            this.migrateOldMetrolineIds();
+        }
+
         // Clean up any cursor styles from the loaded SVG that might interfere
         this.cleanSvgCursorStyles();
         

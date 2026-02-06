@@ -1,6 +1,6 @@
-import * as helpers from '../metromapdesigner/common.js';
-import * as config from '../metromapdesigner/config.js';
-import * as ui from './uifunctions.js';
+import * as helpers from '../metromapdesigner/common.js?v=1.0.4';
+import * as config from '../metromapdesigner/config.js?v=1.0.4';
+import * as ui from './uifunctions.js?v=1.0.4';
 
 let stationEditor = document.getElementById("stationEditor");
 

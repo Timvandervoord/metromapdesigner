@@ -1,9 +1,9 @@
-import * as helpers from '../common.js';
-import * as config from '../config.js';
-import metromapLegenda from './legenda.js';
-import metromapMetroline from './metroline.js';
-import metromapStation from './station.js';
-import { SpatialGrid } from '../common.js';
+import * as helpers from '../common.js?v=1.0.4';
+import * as config from '../config.js?v=1.0.4';
+import metromapLegenda from './legenda.js?v=1.0.4';
+import metromapMetroline from './metroline.js?v=1.0.4';
+import metromapStation from './station.js?v=1.0.4';
+import { SpatialGrid } from '../common.js?v=1.0.4';
 
 /**
  * @class metromap
@@ -230,6 +230,30 @@ export default class metromap {
          const cellSize = config.gridConfig.size * 2; // Use 2x grid size for optimal performance
          this.spatialIndex = new SpatialGrid(cellSize, this.getWidth(), this.getHeight());
          this.buildSpatialIndex();
+
+         // Remove legend items that have no corresponding lines on the map
+         this.removeOrphanedLegendaItems();
+    }
+
+    /**
+     * @method removeOrphanedLegendaItems
+     * @description Removes legend items for metrolines that have no polylines.
+     * @returns {number} The number of legend items removed.
+     */
+    removeOrphanedLegendaItems() {
+        if (!this.legenda) return 0;
+
+        let removedCount = 0;
+
+        for (const line of this.lines) {
+            // If the metroline has no polylines, remove its legend item
+            if (line.polylines.length === 0) {
+                const removed = this.legenda.remove(line.getId());
+                if (removed) removedCount++;
+            }
+        }
+
+        return removedCount;
     }
 
     // HOOKS 
@@ -666,12 +690,12 @@ export default class metromap {
      * @throws {Error} Throws an error if `gridLayer` is not properly initialized.
      */
     gridRemove() {
-        if (this.gridLayer) {
+        if (this.gridLayer && this.gridDisplayed) {
             this.svgMap.removeChild(this.gridLayer);
+            this.gridLayer = null;  // Verwijder referentie
             this.gridDisplayed = false;
-        } else {
-            throw new Error("gridRemove: Attempted to remove a non-existent grid layer.");
         }
+        // Silently return - geen error als grid al weg is
     }
 
     /**
@@ -830,8 +854,10 @@ export default class metromap {
      * @description Deselects the currently selected station and triggers related hooks.
      */
     unSelectStation() {
-        this.stationEdited.unSelect();
-        this.stationEdited = null;
+        if (this.stationEdited) {
+            this.stationEdited.unSelect();
+            this.stationEdited = null;
+        }
         this.isDraggingStation = false;
 
         // Run hooks for the 'save' event
@@ -1470,6 +1496,9 @@ export default class metromap {
         // Run hooks for the 'newLine' event
         this.runHooks('newLine', this.metrolineEdited);
 
+        // Update spatial index with the modified metroline
+        this.updateSpatialIndex('rebuild');
+
         // Reset working variables
         this.metrolineEdited = null;
         this.metrolineEditedSegment = null;
@@ -1540,6 +1569,9 @@ export default class metromap {
         // If there are no segments left, handle cleanup
         if (line.getNumberOfLines() < 1) {
             this.removeMetroline(line);
+        } else {
+            // Update spatial index after removing segment
+            this.updateSpatialIndex('rebuild');
         }
     }
 
@@ -1622,8 +1654,20 @@ export default class metromap {
      * 
      */
     endMoveMetroline() {
+        // Validate elementsDragged array before accessing
+        if (!this.elementsDragged || this.elementsDragged.length < 2) {
+            console.error('endMoveMetroline: elementsDragged array is invalid or has insufficient elements');
+            this.endMoveCanvasElement();
+            return;
+        }
+
         // Apply transformation to the polyline segments
         const offSetLine = helpers.getTranslate(this.elementsDragged[0]);
+        if (!offSetLine || offSetLine.length < 2) {
+            console.error('endMoveMetroline: Invalid offset values');
+            this.endMoveCanvasElement();
+            return;
+        }
         this.metrolineEdited.moveAllLinesByOffset(offSetLine[0], offSetLine[1]);
 
         // Apply transformations on stations
@@ -1642,6 +1686,9 @@ export default class metromap {
 
         // Update all metroline ids
         this.updateAllStationMetrolineIds();
+
+        // Update spatial index after moving metroline
+        this.updateSpatialIndex('rebuild');
     }
 
     /**
@@ -1656,6 +1703,9 @@ export default class metromap {
         this.lines.forEach(line => {
                 line.moveAllLinesByOffset(offsetX, offsetY);
          });
+
+        // Update spatial index after moving all metrolines
+        this.updateSpatialIndex('rebuild');
     }
 
     /**
@@ -1930,7 +1980,7 @@ export default class metromap {
             const edgeStart = polygonVertices[i];
             const edgeEnd = polygonVertices[(i + 1) % polygonVertices.length];
 
-            if (helpers.lineSegmentsIntersect(start, end, edgeStart, edgeEnd)) {
+            if (helpers.lineIntersectsLine(start, end, edgeStart, edgeEnd)) {
                 return true;
             }
         }

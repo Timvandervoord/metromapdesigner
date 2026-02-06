@@ -1,4 +1,4 @@
-import * as ui from './uifunctions.js';
+import * as ui from './uifunctions.js?v=1.0.4';
 
 /**
  * Generic file upload handler with validation
@@ -215,6 +215,13 @@ export function setupUploadListeners(metromapApplication, generateColorButtons, 
   const logoUploadButton = document.getElementById("logoUploadButton");
   if (logoUploadButton) {
     logoUploadButton.addEventListener("click", () => {
+      logoUploadElement?.click();
+    });
+  }
+
+  const logoUploadButtonMenu = document.getElementById("logoUploadButtonMenu");
+  if (logoUploadButtonMenu) {
+    logoUploadButtonMenu.addEventListener("click", () => {
       logoUploadElement?.click();
     });
   }

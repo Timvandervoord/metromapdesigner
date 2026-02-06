@@ -1,6 +1,6 @@
-import * as helpers from '../metromapdesigner/common.js';
-import * as config from '../metromapdesigner/config.js';
-import * as ui from './uifunctions.js';
+import * as helpers from '../metromapdesigner/common.js?v=1.0.4';
+import * as config from '../metromapdesigner/config.js?v=1.0.4';
+import * as ui from './uifunctions.js?v=1.0.4';
 
 // Track resources that need cleanup
 const resourceCleanup = {
@@ -95,7 +95,12 @@ export async function metroMapDownloadPNG(metromapdesignapplication) {
     if (!metromapdesignapplication) {
       throw new Error('Application not initialized yet. Please wait for the app to load.');
     }
-    
+
+    // Deselect all stations to prevent selection box from being exported
+    if (metromapdesignapplication.map) {
+      metromapdesignapplication.map.unselectAllStations();
+    }
+
     // Call the function to get the PNG data
     const pngDataUrl = await metromapdesignapplication.getCanvasContentPng();
 
