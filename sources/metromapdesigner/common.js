@@ -447,7 +447,7 @@ export function parseTransform(transformStr) {
   /**
    * Parses an RGB string like "rgb(227, 32, 23)" into an object with R, G, and B properties.
    * @param {string} rgbString - The RGB string to parse.
-   * @returns {Object} An object with R, G, and B properties.
+   * @returns {Object} An object with r, g, and b properties.
    */
   export function parseRGBString(rgbString) {
     const match = rgbString.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
@@ -455,9 +455,9 @@ export function parseTransform(transformStr) {
         throw new Error(`Invalid RGB string: ${rgbString}`);
     }
     return {
-        R: parseInt(match[1], 10),
-        G: parseInt(match[2], 10),
-        B: parseInt(match[3], 10)
+        r: parseInt(match[1], 10),
+        g: parseInt(match[2], 10),
+        b: parseInt(match[3], 10)
     };
   }
 

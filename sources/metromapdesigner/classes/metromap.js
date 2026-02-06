@@ -2173,6 +2173,9 @@ export default class metromap {
             // Import stations
             if (Array.isArray(jsonData.stations)) {
                 jsonData.stations.forEach(stationData => {
+                    if (!Array.isArray(stationData.metroLines) || stationData.metroLines.length === 0) {
+                        throw new Error(`Station "${stationData.name || 'unknown'}" has no associated metrolines.`);
+                    }
                     const metroline = this.getMetrolineWithId(stationData.metroLines[0]);
                     const stationLineLayer = this.getStationLineLayer(metroline);
                     stationData.x = stationData.position.x;
