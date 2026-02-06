@@ -1,9 +1,9 @@
-import metromap from './classes/metromap.js?v=1.0.4';
-import MetromapImportExport from './classes/importexport.js?v=1.0.4';
-import stateManager from './classes/stateManager.js?v=1.0.4';
-import * as helpers from './common.js?v=1.0.4';
-import * as config from './config.js?v=1.0.4';
-import { enableInlineTextEditing as enableTextEditing } from './common.js?v=1.0.4';
+import metromap from './classes/metromap.js?v=1.0.5';
+import MetromapImportExport from './classes/importexport.js?v=1.0.5';
+import stateManager from './classes/stateManager.js?v=1.0.5';
+import * as helpers from './common.js?v=1.0.5';
+import * as config from './config.js?v=1.0.5';
+import { enableInlineTextEditing as enableTextEditing } from './common.js?v=1.0.5';
 
 /**
  * @class

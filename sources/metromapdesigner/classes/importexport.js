@@ -1,5 +1,5 @@
-import * as config from '../config.js?v=1.0.4';
-import { sanitizeMapContent } from '../common.js?v=1.0.4';
+import * as config from '../config.js?v=1.0.5';
+import { sanitizeMapContent } from '../common.js?v=1.0.5';
 
 /**
  * Class for handling the import and export functionalities of a metromap design.

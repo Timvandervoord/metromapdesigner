@@ -33,7 +33,7 @@ export let applicationConfig = {
       maxStateStackSize : 30,
       toleranceMetrolineDetection : 10,
       appName: "MetroMap design studio",
-      appVersion: "release 2026.1.23.1",
+      appVersion: "release 2026.1.26.1",
       defaultLanguage: "nl",
       languageSelector: "languageSelector",
       canvasSizes: [

@@ -1,6 +1,6 @@
-import * as helpers from '../metromapdesigner/common.js?v=1.0.4';
-import * as config from '../metromapdesigner/config.js?v=1.0.4';
-import * as ui from './uifunctions.js?v=1.0.4';
+import * as helpers from '../metromapdesigner/common.js?v=1.0.5';
+import * as config from '../metromapdesigner/config.js?v=1.0.5';
+import * as ui from './uifunctions.js?v=1.0.5';
 
 // Track resources that need cleanup
 const resourceCleanup = {

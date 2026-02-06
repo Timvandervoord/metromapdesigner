@@ -1,4 +1,4 @@
-import * as ui from './uifunctions.js?v=1.0.4';
+import * as ui from './uifunctions.js?v=1.0.5';
 
 /**
  * Generic file upload handler with validation

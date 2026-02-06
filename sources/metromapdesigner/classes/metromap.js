@@ -1,9 +1,9 @@
-import * as helpers from '../common.js?v=1.0.4';
-import * as config from '../config.js?v=1.0.4';
-import metromapLegenda from './legenda.js?v=1.0.4';
-import metromapMetroline from './metroline.js?v=1.0.4';
-import metromapStation from './station.js?v=1.0.4';
-import { SpatialGrid } from '../common.js?v=1.0.4';
+import * as helpers from '../common.js?v=1.0.5';
+import * as config from '../config.js?v=1.0.5';
+import metromapLegenda from './legenda.js?v=1.0.5';
+import metromapMetroline from './metroline.js?v=1.0.5';
+import metromapStation from './station.js?v=1.0.5';
+import { SpatialGrid } from '../common.js?v=1.0.5';
 
 /**
  * @class metromap
@@ -692,10 +692,10 @@ export default class metromap {
     gridRemove() {
         if (this.gridLayer && this.gridDisplayed) {
             this.svgMap.removeChild(this.gridLayer);
-            this.gridLayer = null;  // Verwijder referentie
+            this.gridLayer = null;
             this.gridDisplayed = false;
         }
-        // Silently return - geen error als grid al weg is
+        // Silently return if grid is already removed - not an error condition
     }
 
     /**

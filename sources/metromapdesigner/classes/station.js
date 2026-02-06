@@ -1,5 +1,5 @@
-import * as helpers from '../common.js?v=1.0.4';
-import * as config from '../config.js?v=1.0.4';
+import * as helpers from '../common.js?v=1.0.5';
+import * as config from '../config.js?v=1.0.5';
 
 /**
  * Represents a station on a metro map. 

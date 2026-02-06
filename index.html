@@ -6,7 +6,7 @@
       APP VERSION - Update this when deploying new versions
       =====================================================
     -->
-    <meta name="app-version" content="1.0.4">
+    <meta name="app-version" content="1.0.5">
 
     <!-- Content Security Policy -->
     <meta http-equiv="Content-Security-Policy" content="
@@ -30,15 +30,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@100;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <!-- Local CSS files - update version query parameter when content changes -->
-    <link rel="stylesheet" href="sources/metromapdesigner.css?v=1.0.4" />
-    <link rel="stylesheet" href="sources/bootstrap.min.css?v=1.0.4" />
+    <link rel="stylesheet" href="sources/metromapdesigner.css?v=1.0.5" />
+    <link rel="stylesheet" href="sources/bootstrap.min.css?v=1.0.5" />
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/i18next@25.3.2/dist/umd/i18next.min.js" integrity="sha384-KS+5nWnT1T9IT3MwScLVU1lgg2h/zDastwehBf9m90mIqNc8ushfn0fzdlh27RTW" crossorigin="anonymous"></script>
 
     <script type="module">
-      import * as application from "./sources/application.js?v=1.0.4";
+      import * as application from "./sources/application.js?v=1.0.5";
       // Dynamically attach all exported functions to the global window object
       Object.entries(application).forEach(([key, value]) => {
         if (typeof value === 'function') {

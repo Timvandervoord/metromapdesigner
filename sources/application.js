@@ -1,26 +1,26 @@
-import MetroMapDesigner from './metromapdesigner/MetroMapDesigner.js?v=1.0.4';
-import * as helpers from './metromapdesigner/common.js?v=1.0.4';
-import * as config from './metromapdesigner/config.js?v=1.0.4';
+import MetroMapDesigner from './metromapdesigner/MetroMapDesigner.js?v=1.0.5';
+import * as helpers from './metromapdesigner/common.js?v=1.0.5';
+import * as config from './metromapdesigner/config.js?v=1.0.5';
 
 // UI functions
-import * as ui from './interfacemodules/uifunctions.js?v=1.0.4';
-export * from './interfacemodules/uifunctions.js?v=1.0.4';
+import * as ui from './interfacemodules/uifunctions.js?v=1.0.5';
+export * from './interfacemodules/uifunctions.js?v=1.0.5';
 
 // Station editor functions
-import * as stationEditor from './interfacemodules/stationeditor.js?v=1.0.4';
-export * from './interfacemodules/stationeditor.js?v=1.0.4';
+import * as stationEditor from './interfacemodules/stationeditor.js?v=1.0.5';
+export * from './interfacemodules/stationeditor.js?v=1.0.5';
 
 // Toolbar functions
-import * as toolbar from './interfacemodules/toolbar.js?v=1.0.4';
-export * from './interfacemodules/toolbar.js?v=1.0.4';
+import * as toolbar from './interfacemodules/toolbar.js?v=1.0.5';
+export * from './interfacemodules/toolbar.js?v=1.0.5';
 
 // Export functions
-import * as exportFunctions from './interfacemodules/exportfunctions.js?v=1.0.4';
-export * from './interfacemodules/exportfunctions.js?v=1.0.4';
+import * as exportFunctions from './interfacemodules/exportfunctions.js?v=1.0.5';
+export * from './interfacemodules/exportfunctions.js?v=1.0.5';
 
 // Upload handlers
-import * as uploadHandlers from './interfacemodules/uploadhandlers.js?v=1.0.4';
-export * from './interfacemodules/uploadhandlers.js?v=1.0.4';
+import * as uploadHandlers from './interfacemodules/uploadhandlers.js?v=1.0.5';
+export * from './interfacemodules/uploadhandlers.js?v=1.0.5';
 
 
 // ####################################################

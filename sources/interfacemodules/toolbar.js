@@ -1,6 +1,6 @@
-import * as helpers from '../metromapdesigner/common.js?v=1.0.4';
-import * as config from '../metromapdesigner/config.js?v=1.0.4';
-import * as ui from './uifunctions.js?v=1.0.4';
+import * as helpers from '../metromapdesigner/common.js?v=1.0.5';
+import * as config from '../metromapdesigner/config.js?v=1.0.5';
+import * as ui from './uifunctions.js?v=1.0.5';
 
 // Cache for DOM elements to avoid repeated lookups
 let metrolineButtons = null;
